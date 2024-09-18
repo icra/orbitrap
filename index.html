@@ -1,0 +1,208 @@
+<!doctype><html><head>
+  <meta charset=utf8>
+  <title>orbitrap</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js" integrity="sha512-dlPw+ytv/6JyepmelABrgeYgHI0O+frEwgfnPdXDTOIZz+eDgfW07QXG02/O8COfivBdGNINy+Vex+lYmJ5rxw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <style>
+    @keyframes animacio{
+      from{
+        background-color: orange;
+      }
+      to{
+        background-color: yellow;
+      }
+    }
+    div[treballant]{
+      animation-name: animacio;
+      animation-duration: 2s;
+      animation-iteration-count: infinite;
+    }
+    [number]{
+      text-align:right;
+      font-family:monospace;
+    }
+    [ms]{
+      font-family:monospace;
+    }
+  </style
+</head><body>
+<b>Processar arxius Orbitrap</b>
+
+<div id=app>
+  <div v-if="!treballant && sheets_processats==0">
+    <div>
+      Peak Label <input v-model="peak_label">
+    </div>
+    <input type=file @change="load_excel($event)">
+  </div>
+
+  <div v-if="error" style="background:red">
+    {{error}}
+  </div>
+
+  <div v-if="treballant" treballant>
+    <div>&#9203; treballant...</div>
+  </div>
+
+  <div v-if="sheets_processats">
+    Sheets processed: {{sheets_processats}}
+  </div>
+
+  <div v-if="sheets">
+    <div>
+      <span v-for="fn in get_filenames" class=filename>
+        <label>
+          <input
+            type=checkbox
+            :checked="filenames_seleccionats.has(fn)"
+            @change="filenames_seleccionats[!filenames_seleccionats.has(fn)?'add':'delete'](fn)"
+          > {{fn}}
+        </label>
+      </span>
+    </div>
+
+    <table border=1>
+      <tbody v-for="sheet in get_sheets_filtrats">
+        <tr>
+          <td ms>{{sheet.nom}}</td>
+          <td>
+            <table
+              border=1
+              style="
+                font-size:smaller;
+                border-collapse:collapse;
+              "
+            >
+              <tr v-for="row in sheet.rows">
+                <td ms>{{row.filename}}</td>
+                <td number>{{row.area}}</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  let app=Vue.createApp({
+    data(){return{
+      peak_label:"T1",
+
+      treballant:false,
+
+      err:"", //missatge error
+
+      wb:null, //objecte workbook que ha sigut carregat
+
+      sheets_processats:0, //number
+
+      sheets:null, //array de sheets processats
+
+      filenames_seleccionats: new Set(["CalCurve"]),
+    }},
+
+    methods:{
+      async load_excel(event){
+        this.treballant=true;
+        this.error="";
+        let file = event.target.files[0];
+        let wb = new ExcelJS.Workbook();
+        this.wb=wb;
+        try{
+          await wb.xlsx.load(file);
+          this.sheets = wb.worksheets.map(sheet=>{
+            return this.processa_sheet(sheet);
+          });
+          this.treballant=false;
+        }catch(err){
+          this.error=err;
+          this.treballant=false;
+        }
+      },
+
+      processa_sheet(sheet){
+        /*per cada sheet necessitem:
+          - nom compost
+          - array filename
+          - array area
+          - array peak label (i filtrar per valor=="T1")
+        */
+
+        let nom = sheet.name;
+        try{
+          nom = sheet.columns[0].values[2];
+        }catch(err){}
+
+        //busca index columna "Filename"
+        let index_col_filename = sheet.columns.find(c=>c.values[1]=="Filename")._number;
+
+        //busca index columna "Area"
+        let index_col_area = sheet.columns.find(c=>c.values[1]=="Area")._number;
+
+        //busca index columna "Peak Label"
+        let index_col_peak_label = sheet.columns.find(c=>c.values[1]=="Peak Label")._number;
+
+        //filtra per "Peak Label"=="T1"
+        //i retorna [filename, area, peak_label]
+        let rows = sheet._rows.filter(r=>{
+          return (
+            r.values[index_col_peak_label] == this.peak_label
+          );
+        }).map(r=>{
+          let filename   = r.values[index_col_filename];
+          let area       = r.values[index_col_area];
+          let peak_label = r.values[index_col_peak_label];
+          let family     = filename.split("_")[0];
+          return {family,filename,area,peak_label};
+        });
+
+        this.sheets_processats++;
+
+        return {nom,rows};
+      },
+
+      //TODO
+      descarregar_fitxer_final(){
+        let wb = new ExcelJS.Workbook();
+        let sh = wb.addWorksheet('Merged');
+        this.fitxer_final.forEach(row=>{
+          sh.addRow(row);
+        });
+
+        //export workbook to xlsx file
+        const fileType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        wb.xlsx.writeBuffer().
+          then(buffer=>saveAs(new Blob([buffer],{type:fileType}),'fitxer_final.xlsx'))
+          .catch(err=>console.log('Error writing excel file',err));
+      },
+    },
+
+    computed:{
+      get_filenames(){
+        if(!this.sheets) return [];
+
+        let set = new Set();
+        this.sheets.forEach(s=>{
+          s.rows.forEach(r=>{
+            set.add(r.family);
+          });
+        });
+
+        return Array.from(set);
+      },
+
+      get_sheets_filtrats(){
+        let sheets = this.sheets.map(s=>{
+          let nom  = s.nom;
+          let rows = s.rows.filter(r=>{
+            return this.filenames_seleccionats.has(r.family);
+          });
+          return {nom,rows};
+        });
+        return sheets;
+      },
+    },
+  }).mount("#app");
+</script>
