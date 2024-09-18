@@ -26,13 +26,13 @@
     }
   </style
 </head><body>
-<b>Processar arxius Orbitrap</b>
+<b>Processar arxius Orbitrap (pàgina en construcció)</b>
 
 <div id=app>
   <div v-if="!treballant && sheets_processats==0">
-    <div>
-      Peak Label <input v-model="peak_label">
-    </div>
+    <p>
+      Peak Label <input v-model="peak_label" style="field-sizing:content">
+    </p>
     <input type=file @change="load_excel($event)">
   </div>
 
