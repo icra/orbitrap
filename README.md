@@ -1,2 +1,7 @@
 # orbitrap
-conversor de fitxer excel a resum
+
+processador automàtic de dades Orbitrap
+
+## Responsables
+- Lluís Bosch lbosch@icra.cat
+- Mira Celic mcelic@icra.cat
