@@ -1,8 +1,13 @@
-<!doctype><html><head>
+<!doctype html><html><head>
   <meta charset=utf8>
   <title>orbitrap</title>
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js" integrity="sha512-dlPw+ytv/6JyepmelABrgeYgHI0O+frEwgfnPdXDTOIZz+eDgfW07QXG02/O8COfivBdGNINy+Vex+lYmJ5rxw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"
+    integrity="sha512-dlPw+ytv/6JyepmelABrgeYgHI0O+frEwgfnPdXDTOIZz+eDgfW07QXG02/O8COfivBdGNINy+Vex+lYmJ5rxw=="
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"
+  ></script>
   <style>
     @keyframes animacio{
       from{
@@ -26,9 +31,11 @@
     }
   </style
 </head><body>
+
 <b>Processar arxius Orbitrap (pàgina en construcció)</b>
 
 <div id=app>
+  <!--boto carregar excel-->
   <div v-if="!treballant && sheets_processats==0">
     <p>
       Peak Label <input v-model="peak_label" style="field-sizing:content">
@@ -48,9 +55,10 @@
     Sheets processed: {{sheets_processats}}
     &mdash;
     Peak Label = {{peak_label}}
-  </div>
+  </div><hr>
 
   <div v-if="sheets">
+    <!--checkboxes calcurve, mm, etc-->
     <div>
       <span v-for="fn in get_filenames" class=filename>
         <label>
@@ -61,6 +69,22 @@
           > {{fn}}
         </label>
       </span>
+    </div><hr>
+
+    <!--checkbox filtres regressio-->
+    <div>
+      <label>
+        <input type=checkbox v-model="veure_nomes_sheets_amb_regressio">
+        Veure només compostos amb regressió lineal MM ben calculada
+      </label><br>
+      <label>
+        r<sup>2</sup> llindar
+        <input type=number :disabled="veure_nomes_sheets_amb_regressio==false" v-model="r_squared_threshold">
+      </label>
+    </div><hr>
+
+    <div style="margin-top:5px">
+      <b>Resultats ({{get_sheets_filtrats.length}}/{{sheets.length}})</b>
     </div>
 
     <table border=1>
@@ -81,6 +105,29 @@
               </tr>
             </table>
           </td>
+          <td>
+            <div v-if="sheet.regressio">
+              <small>Regressió MM (ppb = m·area + n):</small>
+              <table style="font-size:smaller" border=1>
+                <tr>
+                  <th>m</th>
+                  <td number>{{sheet.regressio.m}}</td>
+                </tr>
+                <tr>
+                  <th>n</th>
+                  <td number>{{sheet.regressio.n}}</td>
+                </tr>
+                <tr>
+                  <th>r<sup>2</sup></th>
+                  <td number>{{sheet.regressio.r_squared}}</td>
+                </tr>
+                <tr>
+                  <th>punts</th>
+                  <td number>{{sheet.regressio.N}}</td>
+                </tr>
+              </table>
+            </div>
+          </td>
         </tr>
       </tbody>
     </table>
@@ -88,7 +135,41 @@
 </div>
 
 <script>
-  let app=Vue.createApp({
+  function linear_regression(points){
+    //points: [{x,y},{x,y},...{x,y}]
+    let N = points.length; //number of points
+    if(N<3){ throw new Error("N<3 points"); }
+
+    //arrays of points
+    let xi    = points.map(p=>p.x); //array x
+    let yi    = points.map(p=>p.y); //array y
+    let xi_sq = xi.map(x=>x*x);     //array x squared
+    let yi_sq = yi.map(y=>y*y);     //array y squared
+    let xiyi  = points.map(p=>{     //array x·y
+      return p.x*p.y;
+    });
+
+    //sums of arrays
+    let xi_sum    = xi.reduce((p,c)=>p+c,0);    //sum of x array
+    let yi_sum    = yi.reduce((p,c)=>p+c,0);    //sum of y array
+    let xi_sq_sum = xi_sq.reduce((p,c)=>p+c,0); //sum of x squared array
+    let yi_sq_sum = yi_sq.reduce((p,c)=>p+c,0); //sum of y squared array
+    let xiyi_sum  = xiyi.reduce((p,c)=>p+c,0);  //sum of x·y array
+
+    //compute m (slope) and n (intercept) as (y = mx + n)
+    let m = (N*(xiyi_sum) - yi_sum*xi_sum)/(N*xi_sq_sum - xi_sum*xi_sum);
+    let n = (yi_sum - m*xi_sum)/N;
+
+    //compute r squared
+    let r_squared = Math.pow(N*xiyi_sum - xi_sum*yi_sum, 2)/((N*xi_sq_sum - Math.pow(xi_sum,2))*(N*yi_sq_sum - Math.pow(yi_sum,2)));
+
+    //end
+    return {m, n, r_squared, N};
+  }
+</script>
+
+<script>
+  let app = Vue.createApp({
     data(){return{
       peak_label:"T1",
 
@@ -102,7 +183,23 @@
 
       sheets:null, //array de sheets processats
 
-      filenames_seleccionats: new Set(["CalCurve"]),
+      filenames_seleccionats: new Set(["MM"]),
+
+      veure_nomes_sheets_amb_regressio:true,
+      r_squared_threshold:0.9,
+
+      //regressio lineal: diccionari pels valors x
+      equiv_MM:{
+                   "MM_Blank_AIF":0,
+          "MM_1ppb_IS_100ppb_AIF":1,
+          "MM_5ppb_IS_100ppb_AIF":5,
+         "MM_10ppb_IS_100ppb_AIF":10,
+         "MM_50ppb_IS_100ppb_AIF":50,
+        "MM_100ppb_IS_100ppb_AIF":100,
+        "MM_150ppb_IS_100ppb_AIF":150,
+        "MM_200ppb_IS_100ppb_AIF":200,
+        "MM_250ppb_IS_100ppb_AIF":250,
+      },
     }},
 
     methods:{
@@ -117,6 +214,11 @@
           this.sheets = wb.worksheets.map(sheet=>{
             return this.processa_sheet(sheet);
           });
+
+          this.sheets.forEach(sheet=>{
+            sheet.regressio = this.calcula_regressio(sheet);
+          });
+
           this.treballant=false;
         }catch(err){
           this.error=err;
@@ -125,11 +227,12 @@
       },
 
       processa_sheet(sheet){
-        /*per cada sheet necessitem:
-          - nom compost
-          - array filename
-          - array area
-          - array peak label (i filtrar per valor=="T1")
+        /*
+          per cada sheet necessitem:
+            - nom compost
+            - array filename
+            - array area
+            - array peak label (i filtrar per valor=="T1")
         */
 
         let nom = sheet.name;
@@ -165,6 +268,24 @@
         return {nom,rows};
       },
 
+      calcula_regressio(sheet){
+        let rows = sheet.rows.filter(r=>r.family=="MM");
+        let punts = rows.map(r=>{
+          let x = r.area;
+          let y = this.equiv_MM[r.filename];
+          return {x,y};
+        }).filter(p=>p.x!="N/F");
+
+        //result: {m,n,r2}
+        let result = null;
+        try{
+          result = linear_regression(punts);
+        }catch(err){
+        }
+
+        return result;
+      },
+
       //TODO
       descarregar_fitxer_final(){
         let wb = new ExcelJS.Workbook();
@@ -182,6 +303,7 @@
     },
 
     computed:{
+      //obtenir els diferents camps dins de l'excel
       get_filenames(){
         if(!this.sheets) return [];
 
@@ -201,8 +323,16 @@
           let rows = s.rows.filter(r=>{
             return this.filenames_seleccionats.has(r.family);
           });
-          return {nom,rows};
+          let regressio = s.regressio;
+          return {nom,rows,regressio};
         });
+
+        if(this.veure_nomes_sheets_amb_regressio){
+          sheets = sheets.filter(s=>
+            s.regressio && s.regressio.r_squared>=this.r_squared_threshold
+          );
+        }
+
         return sheets;
       },
     },
