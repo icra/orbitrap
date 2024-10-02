@@ -1,4 +1,5 @@
-<!doctype html><html><head>
+<!doctype html><html>
+<head>
   <meta charset=utf8>
   <title>orbitrap</title>
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
@@ -29,8 +30,10 @@
     [ms]{
       font-family:monospace;
     }
-  </style
-</head><body>
+  </style>
+</head>
+
+<body>
 
 <b>Processar arxius Orbitrap (pàgina en construcció)</b>
 
@@ -99,33 +102,59 @@
                 border-collapse:collapse;
               "
             >
+              <tr>
+                <td> </td>
+                <td>area</td>
+                <td>ppb calculat</td>
+                <td>ppb aplicant recovery</td>
+              </tr>
               <tr v-for="row in sheet.rows">
                 <td ms>{{row.filename}}</td>
                 <td number>{{row.area}}</td>
+                <td number>
+                  <div v-for="ppb_calc in [quantifica_area(sheet,row.area)]">
+                    {{ppb_calc}}
+                  </div>
+                </td>
+                <td>TODO</td>
               </tr>
             </table>
           </td>
           <td>
-            <div v-if="sheet.regressio">
-              <small>Regressió MM (ppb = m·area + n):</small>
-              <table style="font-size:smaller" border=1>
-                <tr>
-                  <th>m</th>
-                  <td number>{{sheet.regressio.m}}</td>
-                </tr>
-                <tr>
-                  <th>n</th>
-                  <td number>{{sheet.regressio.n}}</td>
-                </tr>
-                <tr>
-                  <th>r<sup>2</sup></th>
-                  <td number>{{sheet.regressio.r_squared}}</td>
-                </tr>
-                <tr>
-                  <th>punts</th>
-                  <td number>{{sheet.regressio.N}}</td>
-                </tr>
-              </table>
+            <div v-for="tipus_regressio in ['CC','MM']">
+              <div v-if="sheet.regressio[tipus_regressio]">
+                <table border=1
+                  style="
+                    font-size:smaller;
+                    border-collapse:collapse;
+                    margin-bottom:5px;
+                  "
+                >
+                  <tr>
+                    <th colspan=2>
+                      <small>
+                        Regressió {{tipus_regressio}} (ppb = m·area + n)
+                      </small>
+                    </th>
+                  </tr>
+                  <tr>
+                    <th>m</th>
+                    <td number>{{sheet.regressio[tipus_regressio].m}}</td>
+                  </tr>
+                  <tr>
+                    <th>n</th>
+                    <td number>{{sheet.regressio[tipus_regressio].n}}</td>
+                  </tr>
+                  <tr>
+                    <th>r<sup>2</sup></th>
+                    <td number>{{sheet.regressio[tipus_regressio].r_squared}}</td>
+                  </tr>
+                  <tr>
+                    <td>punts</td>
+                    <td number>{{sheet.regressio[tipus_regressio].N}}</td>
+                  </tr>
+                </table>
+              </div>
             </div>
           </td>
         </tr>
@@ -171,34 +200,44 @@
 <script>
   let app = Vue.createApp({
     data(){return{
+      //filtrar per les files amb el valor "T1" a la columna "Peak Label"
       peak_label:"T1",
 
       treballant:false,
-
       err:"", //missatge error
-
       wb:null, //objecte workbook que ha sigut carregat
-
       sheets_processats:0, //number
-
       sheets:null, //array de sheets processats
-
       filenames_seleccionats: new Set(["MM"]),
 
+      //regressio
       veure_nomes_sheets_amb_regressio:true,
       r_squared_threshold:0.9,
 
       //regressio lineal: diccionari pels valors x
-      equiv_MM:{
-                   "MM_Blank_AIF":0,
-          "MM_1ppb_IS_100ppb_AIF":1,
-          "MM_5ppb_IS_100ppb_AIF":5,
-         "MM_10ppb_IS_100ppb_AIF":10,
-         "MM_50ppb_IS_100ppb_AIF":50,
+      //MM (matrix match) i CC (calibration curve)
+      equiv_MM_o_CC:{
+        //MM
+        "MM_Blank_AIF":             0,
+        "MM_1ppb_IS_100ppb_AIF":    1,
+        "MM_5ppb_IS_100ppb_AIF":    5,
+        "MM_10ppb_IS_100ppb_AIF":  10,
+        "MM_50ppb_IS_100ppb_AIF":  50,
         "MM_100ppb_IS_100ppb_AIF":100,
         "MM_150ppb_IS_100ppb_AIF":150,
         "MM_200ppb_IS_100ppb_AIF":200,
         "MM_250ppb_IS_100ppb_AIF":250,
+
+        //CC
+        "CalCurve_1ppb_IS_100ppb_AIF":          1,
+        "CalCurve_1ppb_IS_100ppb_AIF_02":       1,
+        "CalCurve_5ppb_IS_100ppb_AIF":          5,
+        "CalCurve_10ppb_IS_100ppb_AIF":        10,
+        "CalCurve_10ppb_IS_100ppb_AIF_005_def":10,
+        "CalCurve_50ppb_IS_100ppb_AIF":        50,
+        "CalCurve_100ppb_IS_100ppb_AIF":      100,
+        "CalCurve_150ppb_IS_100ppb_AIF":      150,
+        "CalCurve_200ppb_IS_100ppb_AIF":      200,
       },
     }},
 
@@ -215,8 +254,16 @@
             return this.processa_sheet(sheet);
           });
 
+          //per cada compost, calcula 2 rectes de regressió:
+          //una per MM i l'altra per CalCurve
           this.sheets.forEach(sheet=>{
-            sheet.regressio = this.calcula_regressio(sheet);
+            //regressio CC
+            let CC = this.calcula_regressio(sheet,"CalCurve"); //objecte o null
+            //regressio MM
+            let MM = this.calcula_regressio(sheet,"MM"); //objecte o null
+
+            //guarda els resultats
+            sheet.regressio={CC,MM};
           });
 
           this.treballant=false;
@@ -268,22 +315,58 @@
         return {nom,rows};
       },
 
-      calcula_regressio(sheet){
-        let rows = sheet.rows.filter(r=>r.family=="MM");
+      //adapta les dades per poder cridar "linear_regression()"
+      calcula_regressio(sheet, family){
+        family = family || "MM"; //"MM" || "CalCurve"
+
+        let rows = sheet.rows.filter(r=>r.family==family);
         let punts = rows.map(r=>{
           let x = r.area;
-          let y = this.equiv_MM[r.filename];
+          let y = this.equiv_MM_o_CC[r.filename];
           return {x,y};
         }).filter(p=>p.x!="N/F");
 
         //result: {m,n,r2}
-        let result = null;
+        let result;
         try{
           result = linear_regression(punts);
         }catch(err){
+          result = null;
         }
 
         return result;
+      },
+
+      //calcula PPB a partir d'àrea fent servir les regressions lineals
+      //        PPB = m·area + n
+      quantifica_area(sheet, area){
+        //sheet:object
+        //area:number
+
+        let CC = sheet.regressio.CC;
+        let MM = sheet.regressio.MM;
+
+        //tria quina de les dues regressions es farà servir: CC ò MM
+        let reg = null;
+
+        if(CC && MM){
+          if(CC.r_squared > MM.r_squared){
+            reg = CC;
+          }else{
+            reg = MM;
+          }
+        }else if(!CC && MM){
+          reg = MM;
+        }else if(!MM && CC){
+          reg = CC;
+        }else{
+          reg = false;
+        }
+
+        if(!reg) return false;
+
+        //aplica formula recta (y=mx+n)
+        return reg.m*area + reg.n;
       },
 
       //TODO
@@ -329,7 +412,11 @@
 
         if(this.veure_nomes_sheets_amb_regressio){
           sheets = sheets.filter(s=>
-            s.regressio && s.regressio.r_squared>=this.r_squared_threshold
+            (
+              (s.regressio.MM && s.regressio.MM.r_squared>=this.r_squared_threshold)
+              ||
+              (s.regressio.CC && s.regressio.CC.r_squared>=this.r_squared_threshold)
+            )
           );
         }
 
