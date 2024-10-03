@@ -10,4 +10,6 @@ git push
 # -P  mostra progrés
 # -vv incrementa verbositat
 # -r  actua recursivament
-rsync -hPvr . root@icra.loading.net:/var/www/vhosts/icradev.cat/orbitrap.icradev.cat
+rsync -hPvr \
+  --exclude ".git" \
+  . root@icra.loading.net:/var/www/vhosts/icradev.cat/orbitrap.icradev.cat
