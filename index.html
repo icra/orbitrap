@@ -119,8 +119,12 @@
               </tr>
               <tbody v-for="row in sheet.rows">
                 <tr v-for="ppb_calc in [quantifica_area(sheet,row.area)]">
-                  <td ms>{{row.filename}}</td>
-                  <td number>{{row.area}}</td>
+                  <td ms>
+                    {{row.filename}}
+                  </td>
+                  <td number>
+                    {{row.area}}
+                  </td>
                   <td number>
                     {{ppb_calc}}
                   </td>
