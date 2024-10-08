@@ -35,7 +35,7 @@
 <div>
   <b>TODO (pàgina en construcció)</b>
   <ul>
-    <li>incorporar càlcul recovery</li>
+    <li>[ok] incorporar càlcul recovery</li>
     <li>incorporar info standards</li>
   </ul>
 </div><hr>
@@ -99,7 +99,8 @@
       <tbody v-for="sheet in get_sheets_filtrats">
         <tr>
           <td ms>{{sheet.nom}}</td>
-          <td>
+
+          <td style="vertical-align:top">
             <table
               border=1
               style="
@@ -108,24 +109,38 @@
               "
             >
               <tr>
-                <td> </td>
+                <td>filename</td>
                 <td>area</td>
                 <td>ppb calculat</td>
-                <td>ppb aplicant recovery</td>
-              </tr>
-              <tr v-for="row in sheet.rows">
-                <td ms>{{row.filename}}</td>
-                <td number>{{row.area}}</td>
-                <td number>
-                  <div v-for="ppb_calc in [quantifica_area(sheet,row.area)]">
-                    {{ppb_calc}}
-                  </div>
+                <td>
+                  ppb calculat<br>
+                  <small>(aplicant recovery)</small>
                 </td>
-                <td>TODO</td>
               </tr>
+              <tbody v-for="row in sheet.rows">
+                <tr v-for="ppb_calc in [quantifica_area(sheet,row.area)]">
+                  <td ms>{{row.filename}}</td>
+                  <td number>{{row.area}}</td>
+                  <td number>
+                    {{ppb_calc}}
+                  </td>
+                  <td
+                    v-if="families_where_recovery_is_applied.includes(row.family)"
+                    number
+                  >
+                    <div v-for="rec in [sheet.recovery]">
+                      <div v-if="rec">
+                        {{ppb_calc*rec/100}}
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
             </table>
           </td>
-          <td>
+
+          <!--taules regressio i recovery-->
+          <td style="vertical-align:top">
             <div v-for="tipus_regressio in ['CC','MM']">
               <div v-if="sheet.regressio[tipus_regressio]">
                 <table border=1
@@ -161,6 +176,21 @@
                 </table>
               </div>
             </div>
+
+            <table border=1
+              v-if="sheet.recovery"
+              style="
+                font-size:smaller;
+                border-collapse:collapse;
+              "
+            >
+              <tr>
+                <th>
+                  <small>Recovery (%)</small>
+                </th>
+                <td>{{sheet.recovery}}</td>
+              </tr>
+            </table>
           </td>
         </tr>
       </tbody>
@@ -244,6 +274,12 @@
         "CalCurve_150ppb_IS_100ppb_AIF":      150,
         "CalCurve_200ppb_IS_100ppb_AIF":      200,
       },
+
+      families_where_recovery_is_applied:[
+        "Eff",
+        "Sand",
+        "Chlorination",
+      ],
     }},
 
     methods:{
@@ -269,6 +305,11 @@
 
             //guarda els resultats
             sheet.regressio={CC,MM};
+          });
+
+          //per cada compost, calcula el recovery (a,b,c)
+          this.sheets.forEach(sheet=>{
+            sheet.recovery = this.calcula_recovery(sheet);
           });
 
           this.treballant=false;
@@ -342,6 +383,34 @@
         return result;
       },
 
+      calcula_recovery(sheet){
+        //mitjana dels recoveries
+        let recovery=[];//init empty array
+
+        let rows = sheet.rows.filter(r=>r.family=="Recovery");
+
+        rows.forEach(row=>{
+          let area = row.area; //number | string ("N/F")
+
+          if(area=="N/F") return;
+
+          let ppb = this.quantifica_area(sheet,area); //number or NaN
+
+          if(ppb===false) return;
+
+          //TODO
+          //if(ppb<=60 || ppb>=120) return;
+
+          recovery.push(ppb);
+        });
+
+        let N = recovery.length;
+
+        if(N==0) return false;
+
+        return recovery.reduce((p,c)=>p+c,0)/N;
+      },
+
       //calcula PPB a partir d'àrea fent servir les regressions lineals
       //        PPB = m·area + n
       quantifica_area(sheet, area){
@@ -412,7 +481,8 @@
             return this.filenames_seleccionats.has(r.family);
           });
           let regressio = s.regressio;
-          return {nom,rows,regressio};
+          let recovery  = s.recovery;
+          return {nom,rows,regressio,recovery};
         });
 
         if(this.veure_nomes_sheets_amb_regressio){
