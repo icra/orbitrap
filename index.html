@@ -22,6 +22,9 @@
       animation-duration: 2s;
       animation-iteration-count: infinite;
     }
+    [center]{
+      text-align:center;
+    }
     [number]{
       text-align:right;
       font-family:monospace;
@@ -29,18 +32,28 @@
     [ms]{
       font-family:monospace;
     }
+    [yellow=true]{
+      background:gold;
+    }
+    label:hover{
+      background:gold;
+    }
+    [hover_underline]:hover{
+      text-decoration:underline;
+      cursor:pointer;
+      color:blue;
+    }
   </style>
 </head><body>
 
-<div>
-  <b>TODO (pàgina en construcció)</b>
-  <ul>
-    <li>[ok] incorporar càlcul recovery</li>
-    <li>incorporar info standards</li>
-  </ul>
-</div><hr>
+<nav>
+  <b>pàgina en construcció</b> |
+  <a href="standards.html" target="_blank">veure llista standards</a>
+</nav><hr>
 
-<B>PROCESSAR ARXIUS ORBITRAP</B>
+<div>
+  <b>PROCESSAR ARXIUS ORBITRAP</b>
+</div><hr>
 
 <div id=app>
   <!--boto carregar excel-->
@@ -79,16 +92,71 @@
       </span>
     </div><hr>
 
-    <!--checkbox filtres regressio-->
-    <div>
-      <label>
-        <input type=checkbox v-model="veure_nomes_sheets_amb_regressio">
-        Veure només compostos amb regressió lineal MM ben calculada
-      </label><br>
-      <label>
-        r<sup>2</sup> llindar
-        <input type=number :disabled="veure_nomes_sheets_amb_regressio==false" v-model="r_squared_threshold">
-      </label>
+    <!--filtres-->
+    <div
+      style="
+        display:grid;
+        grid-template-columns:repeat(3,1fr);
+        grid-gap:5px;
+      "
+    >
+      <!--filtre_nom_compost-->
+      <div>
+        <label>
+          Filtrar resultats per nom compost<br>
+          <input v-model="filtre_nom_compost"
+            style="
+              field-sizing: content;
+              min-width:50px;
+            "
+            :yellow="filtre_nom_compost!=''"
+            placeholder="nom compost"
+          >
+          <button @click="filtre_nom_compost=''" :disabled="filtre_nom_compost==''">X</button>
+        </label><br>
+      </div>
+
+      <!--checkbox filtres regressio-->
+      <div>
+        <label>
+          <input type=checkbox v-model="veure_nomes_sheets_amb_regressio">
+          Filtrar resultats per regressió lineal
+        </label><br>
+        <label>
+          r<sup>2</sup> llindar
+          <input type=number :disabled="veure_nomes_sheets_amb_regressio==false" v-model="r_squared_threshold">
+        </label>
+      </div>
+
+      <!--limits recovery-->
+      <div>
+        <table border=1 style="border-collapse:collapse">
+          <tr>
+            <td rowspan=3 center>
+              <label>
+                <input type=checkbox v-model="recovery_thresholds">
+                Recovery llindars
+              </label>
+            </td>
+          </tr>
+          <tr>
+            <td>low</td>
+            <td>
+              <label>
+                <input type=number v-model="recovery_threshold_lo" :disabled="!recovery_thresholds" placeholder="Recovery threshold low">%
+              </label>
+            </td>
+          </tr>
+          <tr>
+            <td>high</td>
+            <td>
+              <label>
+                <input type=number v-model="recovery_threshold_hi" :disabled="!recovery_thresholds" placeholder="Recovery threshold high">%
+              </label>
+            </td>
+          </tr>
+        </table>
+      </div>
     </div><hr>
 
     <div style="margin-top:5px">
@@ -98,7 +166,9 @@
     <table border=1>
       <tbody v-for="sheet in get_sheets_filtrats">
         <tr>
-          <td ms>{{sheet.nom}}</td>
+          <td ms>
+            <span hover_underline @click="filtre_nom_compost=sheet.nom">{{sheet.nom}}</span>
+          </td>
 
           <td style="vertical-align:top">
             <table
@@ -252,6 +322,14 @@
       //regressio
       veure_nomes_sheets_amb_regressio:true,
       r_squared_threshold:0.9,
+
+      //recovery thresholds
+      recovery_thresholds:true,
+      recovery_threshold_lo: 60,
+      recovery_threshold_hi:120,
+
+      //filtre nom compost
+      filtre_nom_compost:"",
 
       //regressio lineal: diccionari pels valors x
       //MM (matrix match) i CC (calibration curve)
@@ -489,6 +567,14 @@
           return {nom,rows,regressio,recovery};
         });
 
+        let filtre_nom_compost_uppercase = this.filtre_nom_compost.toUpperCase();
+
+        if(this.filtre_nom_compost){
+          sheets = sheets.filter(s=>
+            s.nom.toUpperCase().includes(filtre_nom_compost_uppercase)
+          );
+        }
+
         if(this.veure_nomes_sheets_amb_regressio){
           sheets = sheets.filter(s=>
             (
@@ -496,6 +582,15 @@
               ||
               (s.regressio.CC && s.regressio.CC.r_squared>=this.r_squared_threshold)
             )
+          );
+        }
+
+        if(this.recovery_thresholds){
+          sheets = sheets.filter(s=>
+            s.recovery!==false &&
+            (s.recovery >= this.recovery_threshold_lo)
+             &&
+            (s.recovery <= this.recovery_threshold_hi)
           );
         }
 
