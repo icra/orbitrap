@@ -1,0 +1,32 @@
+Reunió 1 Desembre 2025: mcelic, lbosch
+
+1. Afegir botó per tenir la opció de restar els blancs a cada filename:
+
+  - per MM:
+    el camp sempre es diu "MM_Blank_AIF"
+    restar dels valors "MM_1ppb_IS_100ppb_AIF"
+
+  - per CC:
+    no hi ha blanc
+
+  - per les mostres:
+    el camp es diu "Blank_HPLC_AIF"
+
+  - Blank_eff_recovery
+
+2. Afegir botó general per triar quina regressió lineal es fa servir per calcular ppb a tots els compostos
+  - select:
+    * MM
+    * CC
+    * best of CC and MM
+
+3. Calcular mitjana i SD (%) de les mostres, per exemple:
+
+  Eff_secondary_Rosas_1305_AIF_a    \
+  Eff_secondary_Rosas_1305_AIF_b     |-> Eff_secondary_Rosas_1305_AIF_mitjana +/- SD
+  Eff_secondary_Rosas_1305_AIF_c... /
+
+4. En les àrees per regressió i/o al càlcul de ppb, si dóna negatiu posar zero
+  
+5. Crear una vista per exportar resultats compactats
+
