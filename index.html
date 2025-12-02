@@ -83,7 +83,7 @@
   </div><hr>
 
   <div v-if="sheets">
-    <!--checkboxes calcurve, mm, etc-->
+    <!--checkboxes calcurve, mm, blank, etc-->
     <div>
       <span v-for="fn in get_filenames" class=filename>
         <label>
@@ -185,6 +185,7 @@
               <tr>
                 <td>filename</td>
                 <td>area</td>
+                <td>area (corrected)</td>
                 <td>ppb calculat</td>
                 <td>
                   ppb calculat<br>
@@ -198,6 +199,13 @@
                   </td>
                   <td number>
                     {{row.area}}
+                  </td>
+                  <td number>
+                    <div v-for="blank in [sheet.blanks[row.family]]">
+                      <div v-if="blank">
+                        {{row.area-blank}}
+                      </div>
+                    </div>
                   </td>
                   <td number>
                     {{ppb_calc}}
@@ -329,7 +337,7 @@
 
       //recovery thresholds
       recovery_thresholds:true,
-      recovery_threshold_lo: 60,
+      recovery_threshold_lo:60,
       recovery_threshold_hi:120,
 
       //filtre nom compost
@@ -361,6 +369,7 @@
         "CalCurve_200ppb_IS_100ppb_AIF":      200,
       },
 
+      //noms de les mostres (on es quantifica)
       families_where_recovery_is_applied:[
         "Eff",
         "Sand",
@@ -370,11 +379,11 @@
 
     methods:{
       async load_excel(event){
-        this.treballant=true;
-        this.error="";
+        this.treballant = true;
+        this.error = "";
         let file = event.target.files[0];
         let wb = new ExcelJS.Workbook();
-        this.wb=wb;
+        this.wb = wb;
         try{
           await wb.xlsx.load(file);
           this.sheets = wb.worksheets.map(sheet=>{
@@ -389,6 +398,7 @@
             //regressio MM
             let MM = this.calcula_regressio(sheet,"MM"); //objecte o null
 
+            //TODO: millorar: tria la millor regressio per no haver de fer-ho cada cop que es vol aplicar
             //guarda els resultats
             sheet.regressio={CC,MM};
           });
@@ -406,6 +416,7 @@
       },
 
       processa_sheet(sheet){
+        //sheet: objecte
         /*
           per cada sheet necessitem:
             - nom compost
@@ -428,6 +439,9 @@
         //busca index columna "Peak Label"
         let index_col_peak_label = sheet.columns.find(c=>c.values[1]=="Peak Label")._number;
 
+        //blank per família (area=number)
+        let blanks={}; //{"family"=>area}
+
         //filtra per "Peak Label"=="T1"
         //i retorna [filename, area, peak_label]
         let rows = sheet._rows.filter(r=>{
@@ -439,12 +453,26 @@
           let area       = r.values[index_col_area];
           let peak_label = r.values[index_col_peak_label];
           let family     = filename.split("_")[0];
+
+          //comprova si aquesta area correspon a un blank
+          //TODO continuar aqui
+          if(filename=="MM_Blank_AIF"){
+            if(area!="N/F"){
+              blanks[family] = area;
+            }
+          }
+          if(filename=="Blank_HPLC_AIF"){
+            if(area!="N/F"){
+              blanks.mostres = area;
+            }
+          }
+
           return {family,filename,area,peak_label};
         });
 
         this.sheets_processats++;
 
-        return {nom,rows};
+        return {nom,rows,blanks};
       },
 
       //adapta les dades per poder cridar "linear_regression()"
@@ -507,7 +535,7 @@
         let MM = sheet.regressio.MM;
 
         //tria quina de les dues regressions es farà servir: CC ò MM
-        let reg = null;
+        let reg = null; //regressio triada (objecte)
 
         if(CC && MM){
           if(CC.r_squared > MM.r_squared){
@@ -529,7 +557,7 @@
         return reg.m*area + reg.n;
       },
 
-      //TODO
+      //TODO implementar botó
       descarregar_fitxer_final(){
         let wb = new ExcelJS.Workbook();
         let sh = wb.addWorksheet('Merged');
@@ -560,6 +588,7 @@
         return Array.from(set);
       },
 
+      //filtra sheets per nom / r^2 / recovery
       get_sheets_filtrats(){
         let sheets = this.sheets.map(s=>{
           let nom  = s.nom;
@@ -568,17 +597,19 @@
           });
           let regressio = s.regressio;
           let recovery  = s.recovery;
-          return {nom,rows,regressio,recovery};
+          let blanks    = s.blanks
+          return {nom,rows,regressio,recovery,blanks};
         });
 
-        let filtre_nom_compost_uppercase = this.filtre_nom_compost.toUpperCase();
-
+        //filtra per nom
         if(this.filtre_nom_compost){
+          let filtre_nom_compost_uppercase = this.filtre_nom_compost.toUpperCase();
           sheets = sheets.filter(s=>
             s.nom.toUpperCase().includes(filtre_nom_compost_uppercase)
           );
         }
 
+        //filtra per r2 de la regressio
         if(this.veure_nomes_sheets_amb_regressio){
           sheets = sheets.filter(s=>
             (
@@ -589,6 +620,7 @@
           );
         }
 
+        //filtra per recovery thresholds
         if(this.recovery_thresholds){
           sheets = sheets.filter(s=>
             s.recovery!==false &&
