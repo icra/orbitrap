@@ -1,0 +1,3 @@
+Options +Indexes
+IndexOptions FancyIndexing HTMLTable NameWidth=*
+IndexOptions SuppressDescription SuppressHTMLPreamble

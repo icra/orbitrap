@@ -32,11 +32,14 @@
     [center]{
       text-align:center;
     }
+    [left]{
+      text-align:left;
+    }
     [number]{
       text-align:right;
       font-family:monospace;
     }
-    [ms]{
+    [monospace]{
       font-family:monospace;
     }
     [yellow=true]{
@@ -50,12 +53,25 @@
       cursor:pointer;
       color:blue;
     }
+    input[type=number]{
+      text-align:right;
+    }
+    table.subtaula{
+      font-size:smaller;
+      border-collapse:collapse;
+      border-color:#ddd;
+    }
+    [millor_regresio=true]{
+      background:#af0;
+    }
+    [valigntop]{
+      vertical-align:top;
+    }
   </style>
 </head><body>
 
 <nav>
-  <b>pàgina en construcció</b> |
-  <a href="standards.html" target="_blank">veure llista standards</a>
+  <a href="xlsx" target="_blank">[dev] xlsx files</a>
 </nav><hr>
 
 <div>
@@ -66,7 +82,8 @@
   <!--boto carregar excel-->
   <div v-if="!treballant && sheets_processats==0">
     <p>
-      Peak Label <input v-model="peak_label" style="field-sizing:content">
+      Valor columna "Peak Label":
+      <input v-model="peak_label">
     </p>
     <input type=file @change="load_excel($event)">
   </div>
@@ -80,23 +97,88 @@
   </div>
 
   <div v-if="sheets_processats">
-    Sheets processed: {{sheets_processats}}
-    &mdash;
-    Peak Label = {{peak_label}}
+    <ul>
+      <li>Peak Label = {{peak_label}}</li>
+      <li>Número total de compostos: {{sheets_processats}}</li>
+    </ul>
   </div><hr>
 
   <div v-if="sheets">
-    <!--checkboxes calcurve, mm, blank, etc-->
-    <div>
-      <span v-for="fn in get_filenames" class=filename>
-        <label>
-          <input
-            type=checkbox
-            :checked="filenames_seleccionats.has(fn)"
-            @change="filenames_seleccionats[!filenames_seleccionats.has(fn)?'add':'delete'](fn)"
-          > {{fn}}
-        </label>
-      </span>
+
+    <div
+      style="
+        display:flex;
+        gap:5px;
+      "
+    >
+      <!--menú per activar/desactivar filenames-->
+      <table border=1>
+        <tr>
+          <th colspan=2 left>Filenames visibles</th>
+        </tr>
+        <tr v-for="set,i in [noms_families_fixes, get_noms_mostres]">
+          <td>
+            {{
+              [
+                "Cal·libració",
+                "Mostres",
+              ][i]
+            }}
+          </td>
+          <td>
+            <span v-for="fn in Array.from(set)">
+              <label>
+                <input
+                  type=checkbox
+                  :checked="filenames_seleccionats.has(fn)"
+                  @change="filenames_seleccionats[!filenames_seleccionats.has(fn)?'add':'delete'](fn)"
+                > {{fn}}
+              </label>
+            </span>
+          </td>
+        </tr>
+      </table>
+
+      <!--menú per activar/desactivar blancs-->
+      <table border=1>
+        <tr>
+          <th colspan=2 left>Restar blank a:</th>
+        </tr>
+        <tr>
+          <td>MM ("MM_Blank_AIF")</td>
+          <td>
+            <label><input type=radio v-model="restar_blancs.MM" :value="true"> sí</label>
+            <label><input type=radio v-model="restar_blancs.MM" :value="false"> no</label>
+          </td>
+        </tr>
+        <tr>
+          <td>Recovery (?)</td>
+          <td>
+            <label><input type=radio v-model="restar_blancs.recovery" :value="true"> sí</label>
+            <label><input type=radio v-model="restar_blancs.recovery" :value="false"> no</label>
+          </td>
+        </tr>
+        <tr>
+          <td>Mostres ("Blank_HPLC_AIF")</td>
+          <td>
+            <label><input type=radio v-model="restar_blancs.mostres" :value="true"> sí</label>
+            <label><input type=radio v-model="restar_blancs.mostres" :value="false"> no</label>
+          </td>
+        </tr>
+      </table>
+
+      <table border=1>
+        <tr>
+          <th left>Regressió utilitzada</th>
+        </tr>
+        <tr>
+          <td>
+            <label><input type=radio v-model=regressió_utilitzada value="CC">CalCurve</label><br>
+            <label><input type=radio v-model=regressió_utilitzada value="MM">MM</label><br>
+            <label><input type=radio v-model=regressió_utilitzada value="best">Best r<sup>2</sup> between CalCurve and MM</label>
+          </td>
+        </tr>
+      </table>
     </div><hr>
 
     <!--filtres-->
@@ -110,11 +192,12 @@
       <!--filtre_nom_compost-->
       <div>
         <label>
-          Filtrar resultats per nom compost<br>
+          Filtrar per nom compost<br>
           <input v-model="filtre_nom_compost"
             style="
               field-sizing: content;
-              min-width:50px;
+              min-width:150px;
+              padding:1px 5px;
             "
             :yellow="filtre_nom_compost!=''"
             placeholder="nom compost"
@@ -127,11 +210,13 @@
       <div>
         <label>
           <input type=checkbox v-model="veure_nomes_sheets_amb_regressio">
-          Filtrar resultats per regressió lineal
+          Filtrar per r<sup>2</sup> regressió
         </label><br>
         <label>
           r<sup>2</sup> llindar
-          <input type=number :disabled="veure_nomes_sheets_amb_regressio==false" v-model="r_squared_threshold">
+          <input type=number :disabled="veure_nomes_sheets_amb_regressio==false" v-model="r_squared_threshold"
+            min=0 max=9 step=0.01
+          >
         </label>
       </div>
 
@@ -142,7 +227,7 @@
             <td rowspan=3 center>
               <label>
                 <input type=checkbox v-model="recovery_thresholds">
-                Recovery llindars
+                Filtrar per Recovery
               </label>
             </td>
           </tr>
@@ -150,7 +235,7 @@
             <td>low</td>
             <td>
               <label>
-                <input type=number v-model="recovery_threshold_lo" :disabled="!recovery_thresholds" placeholder="Recovery threshold low">%
+                <input type=number v-model="recovery_threshold_lo" :disabled="!recovery_thresholds" placeholder="Recovery threshold low" min=0 max=999>%
               </label>
             </td>
           </tr>
@@ -158,7 +243,7 @@
             <td>high</td>
             <td>
               <label>
-                <input type=number v-model="recovery_threshold_hi" :disabled="!recovery_thresholds" placeholder="Recovery threshold high">%
+                <input type=number v-model="recovery_threshold_hi" :disabled="!recovery_thresholds" placeholder="Recovery threshold high" min=0 max=999>%
               </label>
             </td>
           </tr>
@@ -170,56 +255,96 @@
       <b>Resultats ({{get_sheets_filtrats.length}}/{{sheets.length}})</b>
     </div>
 
-    <table border=1>
+    <table border=1 style="border-collapse:collapse">
       <tbody v-for="sheet in get_sheets_filtrats">
         <tr>
-          <td ms>
+          <td monospace
+            valigntop
+          >
             <span hover_underline @click="filtre_nom_compost=sheet.nom">{{sheet.nom}}</span>
           </td>
 
-          <td style="vertical-align:top">
-            <table
-              border=1
-              style="
-                font-size:smaller;
-                border-collapse:collapse;
-              "
-            >
+          <td valigntop>
+
+            <!--taula calibracio-->
+            <table border=1 class=subtaula v-if="cal_mostrar_taula_calibracio">
+              <tr><th left colspan=5>Cal·libració</th></tr>
               <tr>
                 <td>filename</td>
                 <td>area</td>
-                <td>area-blank</td>
+                <td>area (blanked)</td>
+                <td>ppb teòric</td>
                 <td>ppb calculat</td>
-                <td>
-                  ppb calculat<br>
-                  <small>(aplicant recovery)</small>
-                </td>
               </tr>
               <tbody v-for="row in sheet.rows">
-                <tr v-for="ppb_calc in [quantifica_area(sheet,row.area)]">
-                  <td ms>
+                <tr
+                  v-if="filenames_seleccionats.has(row.family) && noms_families_fixes.has(row.family)"
+                  v-for="area_blanked in [calcula_area_minus_blank(sheet, row.family, row.area)]"
+                >
+                  <td monospace>
                     {{row.filename}}
                   </td>
                   <td number>
                     {{row.area}}
                   </td>
                   <td number>
-                    <div v-for="blank in [sheet.blanks[row.family]]">
-                      <div v-if="blank">
-                        {{row.area-blank}}
-                      </div>
+                    <div v-if="row.area!=area_blanked">
+                      {{area_blanked}}
                     </div>
                   </td>
                   <td number>
-                    {{ppb_calc}}
+                    <div v-for="ppb_teoric in [parseInt(row.filename.split('_')[1])]">
+                      <div v-if="ppb_teoric">
+                        {{ppb_teoric}}
+                      </div>
+                      <div v-else>0</div>
+                    </div>
                   </td>
-                  <td
-                    v-if="families_where_recovery_is_applied.includes(row.family)"
-                    number
-                  >
+                  <td number>
+                    {{quantifica_area(sheet, area_blanked)}}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <!--taula mostres-->
+            <table border=1 class=subtaula v-if="cal_mostrar_taula_mostres"
+              style="margin-top:2px"
+            >
+              <tr><th colspan=5 left>Mostres</th></tr>
+              <tr>
+                <td>filename</td>
+                <td>area</td>
+                <td>area (blanked)</td>
+                <td>ppb calculat</td>
+                <td>
+                  ppb calculat<br>
+                  <small>(+recovery)</small>
+                </td>
+              </tr>
+              <tbody v-for="row in sheet.rows">
+                <tr
+                  v-if="filenames_seleccionats.has(row.family) && get_noms_mostres.has(row.family)"
+                  v-for="area_blanked in [calcula_area_minus_blank(sheet, row.family, row.area)]"
+                >
+                  <td monospace>
+                    {{row.filename}}
+                  </td>
+                  <td number>
+                    {{row.area}}
+                  </td>
+                  <td number>
+                    <div v-if="row.area!=area_blanked">
+                      {{area_blanked}}
+                    </div>
+                  </td>
+                  <td number>
+                    {{quantifica_area(sheet, area_blanked)}}
+                  </td>
+                  <td number >
                     <div v-for="rec in [sheet.recovery]">
                       <div v-if="rec">
-                        {{ppb_calc*rec/100}}
+                        {{quantifica_area(sheet, area_blanked)*rec/100}}
                       </div>
                     </div>
                   </td>
@@ -229,18 +354,17 @@
           </td>
 
           <!--taules regressio i recovery-->
-          <td style="vertical-align:top">
+          <td valigntop>
             <div v-for="tipus_regressio in ['CC','MM']">
               <div v-if="sheet.regressio[tipus_regressio]">
-                <table border=1
-                  style="
-                    font-size:smaller;
-                    border-collapse:collapse;
-                    margin-bottom:5px;
-                  "
+                <table border=1 class=subtaula
+                  v-if="regressió_utilitzada=='best' || regressió_utilitzada==tipus_regressio"
+                  style="margin-bottom:2px"
                 >
                   <tr>
-                    <th colspan=2>
+                    <th colspan=2
+                      :millor_regresio="calcula_millor_regressio(sheet)==tipus_regressio"
+                    >
                       <small>
                         Regressió {{tipus_regressio}} (ppb = m·area + n)
                       </small>
@@ -267,11 +391,8 @@
             </div>
 
             <table border=1
+              class=subtaula
               v-if="sheet.recovery"
-              style="
-                font-size:smaller;
-                border-collapse:collapse;
-              "
             >
               <tr>
                 <th>
@@ -288,6 +409,7 @@
 </div>
 
 <script>
+  //mòdul per regressió lineal
   function linear_regression(points){
     //points: [{x,y},{x,y},...{x,y}]
     let N = points.length; //number of points
@@ -324,15 +446,19 @@
 <script>
   let app = Vue.createApp({
     data(){return{
-      //filtrar per les files amb el valor "T1" a la columna "Peak Label"
+      //valor "T1" a la columna "Peak Label" per filtrar al carregar l'excel
       peak_label:"T1",
 
       treballant:false,
       err:"", //missatge error
       wb:null, //objecte workbook que ha sigut carregat
+
+      //main array
+      sheets:null, //array sheets processats
       sheets_processats:0, //number
-      sheets:null, //array de sheets processats
-      filenames_seleccionats: new Set(["MM"]),
+
+      //filenames que es veuen a les taules
+      filenames_seleccionats: new Set(["CalCurve","MM"]),
 
       //regressio
       veure_nomes_sheets_amb_regressio:true,
@@ -346,38 +472,25 @@
       //filtre nom compost
       filtre_nom_compost:"",
 
-      //regressio lineal: diccionari pels valors x
-      //MM (matrix match) i CC (calibration curve)
-      equiv_MM_o_CC:{
-        //MM
-        "MM_Blank_AIF":             0,
-        "MM_1ppb_IS_100ppb_AIF":    1,
-        "MM_5ppb_IS_100ppb_AIF":    5,
-        "MM_10ppb_IS_100ppb_AIF":  10,
-        "MM_50ppb_IS_100ppb_AIF":  50,
-        "MM_100ppb_IS_100ppb_AIF":100,
-        "MM_150ppb_IS_100ppb_AIF":150,
-        "MM_200ppb_IS_100ppb_AIF":200,
-        "MM_250ppb_IS_100ppb_AIF":250,
+      //filenames que NO són mostres
+      //aquests noms surten a tots els excels, són fixos
+      noms_families_fixes:new Set([
+        "CalCurve", //"calibration curve"
+        "MM",       //"matrix match"
+        "Blank",    //blancs mostres
+        "Recovery", //recovery
+        "QC",       //quality control
+      ]),
 
-        //CC
-        "CalCurve_1ppb_IS_100ppb_AIF":          1,
-        "CalCurve_1ppb_IS_100ppb_AIF_02":       1,
-        "CalCurve_5ppb_IS_100ppb_AIF":          5,
-        "CalCurve_10ppb_IS_100ppb_AIF":        10,
-        "CalCurve_10ppb_IS_100ppb_AIF_005_def":10,
-        "CalCurve_50ppb_IS_100ppb_AIF":        50,
-        "CalCurve_100ppb_IS_100ppb_AIF":      100,
-        "CalCurve_150ppb_IS_100ppb_AIF":      150,
-        "CalCurve_200ppb_IS_100ppb_AIF":      200,
+      //restar blancs
+      restar_blancs:{
+        MM       : false,
+        mostres  : false,
+        recovery : false,
       },
 
-      //noms de les mostres (on es quantifica)
-      families_where_recovery_is_applied:[
-        "Eff",
-        "Sand",
-        "Chlorination",
-      ],
+      //forçar regressió utilitzada
+      regressió_utilitzada:"best",
     }},
 
     methods:{
@@ -392,25 +505,6 @@
           this.sheets = wb.worksheets.map(sheet=>{
             return this.processa_sheet(sheet);
           });
-
-          //per cada compost, calcula 2 rectes de regressió:
-          //una per MM i l'altra per CalCurve
-          this.sheets.forEach(sheet=>{
-            //regressio CC
-            let CC = this.calcula_regressio(sheet,"CalCurve"); //objecte o null
-            //regressio MM
-            let MM = this.calcula_regressio(sheet,"MM"); //objecte o null
-
-            //TODO: millorar: tria la millor regressio per no haver de fer-ho cada cop que es vol aplicar
-            //guarda els resultats
-            sheet.regressio={CC,MM};
-          });
-
-          //per cada compost, calcula el recovery (a,b,c)
-          this.sheets.forEach(sheet=>{
-            sheet.recovery = this.calcula_recovery(sheet);
-          });
-
           this.treballant=false;
         }catch(err){
           this.error=err;
@@ -458,7 +552,6 @@
           let family     = filename.split("_")[0];
 
           //comprova si aquesta area correspon a un blank
-          //TODO continuar aqui
           if(filename=="MM_Blank_AIF"){
             if(area!="N/F"){
               blanks[family] = area;
@@ -475,7 +568,11 @@
 
         this.sheets_processats++;
 
-        return {nom,rows,blanks};
+        return {
+          nom, rows, blanks,
+          regressio:null,
+          recovery:null,
+        };
       },
 
       //adapta les dades per poder cridar "linear_regression()"
@@ -483,9 +580,17 @@
         family = family || "MM"; //"MM" || "CalCurve"
 
         let rows = sheet.rows.filter(r=>r.family==family);
+
         let punts = rows.map(r=>{
           let x = r.area;
-          let y = this.equiv_MM_o_CC[r.filename];
+
+          if(family=="MM"){
+            x = this.calcula_area_minus_blank(sheet,family,r.area);
+          }
+
+          let y = parseInt(r.filename.split("_")[1]);
+          if(isNaN(y)){y=0}
+
           return {x,y};
         }).filter(p=>p.x!="N/F");
 
@@ -515,9 +620,6 @@
 
           if(ppb===false) return;
 
-          //TODO
-          //if(ppb<=60 || ppb>=120) return;
-
           recovery.push(ppb);
         });
 
@@ -528,7 +630,7 @@
         return recovery.reduce((p,c)=>p+c,0)/N;
       },
 
-      //calcula PPB a partir d'àrea fent servir les regressions lineals
+      //calcula PPB a partir d'àrea, fent servir regressions lineals (CC i MM)
       //        PPB = m·area + n
       quantifica_area(sheet, area){
         //sheet:object
@@ -540,27 +642,74 @@
         //tria quina de les dues regressions es farà servir: CC ò MM
         let reg = null; //regressio triada (objecte)
 
-        if(CC && MM){
-          if(CC.r_squared > MM.r_squared){
+        if(this.regressió_utilitzada=="best"){
+          if(CC && MM){
+            if(CC.r_squared > MM.r_squared){
+              reg = CC;
+            }else{
+              reg = MM;
+            }
+          }else if(!CC && MM){
+            reg = MM;
+          }else if(!MM && CC){
             reg = CC;
           }else{
-            reg = MM;
+            reg = false;
           }
-        }else if(!CC && MM){
-          reg = MM;
-        }else if(!MM && CC){
+        }
+        if(this.regressió_utilitzada=="CC"){
           reg = CC;
-        }else{
-          reg = false;
+        }
+        if(this.regressió_utilitzada=="MM"){
+          reg = MM;
         }
 
         if(!reg) return false;
 
         //aplica formula recta (y=mx+n)
-        return reg.m*area + reg.n;
+        let y = reg.m*area + reg.n;
+        if(y<0) y=0;
+        return y;
       },
 
-      //TODO implementar botó
+      calcula_area_minus_blank(sheet, family, area){
+        //sheet:  object
+        //family: string
+        //area:   number
+        if(area=="N/F") return "N/F";
+
+        let blank = 0;
+
+        //MM
+        if(family=="MM"){
+          if(this.restar_blancs.MM){
+            let bl = sheet.blanks.MM;
+            if(bl) blank=bl;
+          }
+          return area-blank;
+        }
+
+        //Recovery
+        if(family=="Recovery"){
+          if(this.restar_blancs.recovery){
+            let bl = sheet.blanks.Recovery;
+            if(bl) blank=bl;
+          }
+          return area-blank;
+        }
+
+        if(this.get_noms_mostres.has(family)){
+          if(this.restar_blancs.mostres){
+            let bl = sheet.blanks.mostres;
+            if(bl) blank=bl;
+          }
+          return area-blank;
+        }
+
+        return area;
+      },
+
+      //TODO
       descarregar_fitxer_final(){
         let wb = new ExcelJS.Workbook();
         let sh = wb.addWorksheet('Merged');
@@ -574,14 +723,39 @@
           then(buffer=>saveAs(new Blob([buffer],{type:fileType}),'fitxer_final.xlsx'))
           .catch(err=>console.log('Error writing excel file',err));
       },
+
+      //calcula si és millor MM o CC
+      calcula_millor_regressio(sheet){
+        let millor = false; //return value
+
+        let CC = sheet.regressio.CC;
+        let MM = sheet.regressio.MM;
+
+        if(CC && MM){
+          if(CC.r_squared > MM.r_squared){
+            millor="CC";
+          }else{
+            millor="MM";
+          }
+        }else if(!CC && MM){
+          millor="MM";
+        }else if(!MM && CC){
+          millor="CC";
+        }
+
+        return millor;
+      },
     },
 
     computed:{
-      //obtenir els diferents camps dins de l'excel
+      //obtenir tots els diferents camps dins de l'excel
+      //inclou camps fixes (CalCurve,MM...) i camps variables (mostres)
       get_filenames(){
         if(!this.sheets) return [];
 
-        let set = new Set();
+        let set = new Set(); //return value
+
+        //itera sheets processats
         this.sheets.forEach(s=>{
           s.rows.forEach(r=>{
             set.add(r.family);
@@ -591,17 +765,26 @@
         return Array.from(set);
       },
 
-      //filtra sheets per nom / r^2 / recovery
+      get_noms_mostres(){
+        let filenames = new Set(this.get_filenames);
+        //treu els noms fixes del set
+        Array.from(this.noms_families_fixes).forEach(nom=>{
+          filenames.delete(nom);
+        });
+        return filenames;
+      },
+
+      //filtra sheets
       get_sheets_filtrats(){
         let sheets = this.sheets.map(s=>{
-          let nom  = s.nom;
-          let rows = s.rows.filter(r=>{
-            return this.filenames_seleccionats.has(r.family);
-          });
-          let regressio = s.regressio;
-          let recovery  = s.recovery;
-          let blanks    = s.blanks
-          return {nom,rows,regressio,recovery,blanks};
+          let nom    = s.nom;
+          let rows   = s.rows;
+          let blanks = s.blanks;
+          return {
+            nom, rows, blanks,
+            regressio:null,
+            recovery:null,
+          };
         });
 
         //filtra per nom
@@ -612,28 +795,51 @@
           );
         }
 
-        //filtra per r2 de la regressio
+        //calcula rectes de regressió
+        //una per MM i l'altra per CalCurve
+        //fer-ho aquí perquè el valor de "restar_blancs" pot haver canviat
+        sheets.forEach(sheet=>{
+          //regressio CC
+          let CC = this.calcula_regressio(sheet,"CalCurve"); //objecte o null
+          //regressio MM
+          let MM = this.calcula_regressio(sheet,"MM"); //objecte o null
+
+          //guarda resultats
+          sheet.regressio={CC,MM};
+        });
+
+        //filtra per r2
         if(this.veure_nomes_sheets_amb_regressio){
           sheets = sheets.filter(s=>
             (
-              (s.regressio.MM && s.regressio.MM.r_squared>=this.r_squared_threshold)
-              ||
+              (s.regressio.MM && s.regressio.MM.r_squared>=this.r_squared_threshold) ||
               (s.regressio.CC && s.regressio.CC.r_squared>=this.r_squared_threshold)
             )
           );
         }
 
+        //per cada compost, calcula el recovery (a,b,c)
+        sheets.forEach(sheet=>{
+          sheet.recovery = this.calcula_recovery(sheet);
+        });
+
         //filtra per recovery thresholds
         if(this.recovery_thresholds){
           sheets = sheets.filter(s=>
             s.recovery!==false &&
-            (s.recovery >= this.recovery_threshold_lo)
-             &&
+            (s.recovery >= this.recovery_threshold_lo) &&
             (s.recovery <= this.recovery_threshold_hi)
           );
         }
 
         return sheets;
+      },
+
+      cal_mostrar_taula_calibracio(){
+        return Array.from(this.filenames_seleccionats).some(fn=>this.noms_families_fixes.has(fn));
+      },
+      cal_mostrar_taula_mostres(){
+        return Array.from(this.filenames_seleccionats).some(fn=>this.get_noms_mostres.has(fn));
       },
     },
   }).mount("#app");
