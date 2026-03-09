@@ -831,7 +831,7 @@
 
           //values
           sheet.rows.forEach(row=>{
-            let area_blanked = this.calcula_area_minus_blank(sheet,row.family,row.area),
+            let area_blanked = this.calcula_area_minus_blank(sheet,row.family,row.area);
             let ppb          = this.quantifica_area(sheet,area_blanked);
 
             sh.addRow([
