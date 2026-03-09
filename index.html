@@ -234,7 +234,7 @@
     <div
       style="
         display:grid;
-        grid-template-columns:repeat(3,1fr);
+        grid-template-columns:repeat(4,1fr);
         grid-gap:5px;
       "
     >
@@ -298,6 +298,13 @@
           </tr>
         </table>
       </div>
+
+      <div>
+        <label>
+          <input type=checkbox v-model="mostrar_area_NF">
+          Show rows with area "N/F"
+        </label><br>
+      </div>
     </div><hr>
 
     <div style="margin-top:5px">
@@ -333,7 +340,10 @@
               <!--calibration-->
               <tbody v-for="row in sheet.rows" v-if="cal_mostrar_taula_calibracio">
                 <tr
-                  v-if="filenames_seleccionats.has(row.family) && noms_families_fixes.has(row.family)"
+                  v-if="
+                    filenames_seleccionats.has(row.family) && noms_families_fixes.has(row.family)
+                    && (mostrar_area_NF||row.area!='N/F')
+                  "
                   v-for="area_blanked in [calcula_area_minus_blank(sheet, row.family, row.area)]"
                 >
                   <td style="color:#aaa">calibration</td>
@@ -373,7 +383,10 @@
               <!--samples-->
               <tbody v-for="row in sheet.rows" v-if="cal_mostrar_taula_mostres">
                 <tr
-                  v-if="filenames_seleccionats.has(row.family) && get_noms_mostres.has(row.family)"
+                  v-if="
+                    filenames_seleccionats.has(row.family) && get_noms_mostres.has(row.family)
+                    && (mostrar_area_NF||row.area!='N/F')
+                    "
                   v-for="area_blanked in [calcula_area_minus_blank(sheet, row.family, row.area)]"
                 >
                   <td style="color:#aaa">sample</td>
@@ -548,10 +561,13 @@
       //forçar regressió utilitzada
       regressió_utilitzada:"best",
 
-      //noms blancs configurables per l'usuari
+      //noms blancs
       nom_blanc_MM:"MM_Blank_AIF",
       nom_blanc_recovery:"Blank_recovery_AIF",
       nom_blanc_mostres:"Blank_HPLC_AIF",
+
+      //configuracio mostrar "NFs" (valors àrea que no han sortit bé)
+      mostrar_area_NF:true,
     }},
 
     methods:{
@@ -688,6 +704,14 @@
           let area = row.area; //number | string ("N/F")
 
           if(area=="N/F") return;
+
+          //restar blanc recovery
+          if(this.restar_blancs.recovery){
+            let blank=0;
+            let bl = sheet.blanks.recovery;
+            if(bl) blank=bl;
+            area -= blank;
+          }
 
           let ppb = this.quantifica_area(sheet,area); //number or NaN
 
