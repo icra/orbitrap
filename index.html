@@ -343,6 +343,9 @@
                   <div>ppb computed</div>
                   <div><small>(appl. recovery)</small></div>
                 </td>
+                <td>
+                  exclude
+                </td>
               </tr>
 
               <!--calibration-->
@@ -385,6 +388,10 @@
                   </td>
 
                   <td empty>&empty;</td>
+
+                  <td v-if="row.family=='CalCurve' || row.family=='MM'">
+                    <input type=checkbox v-model="row.exclude">
+                  </td>
                 </tr>
               </tbody>
 
@@ -639,9 +646,12 @@
           let family     = filename.split("_")[0];
 
           //comprova si aquesta area correspon a un blank
+          //sino, assigna'l a recovery
           if(family=="Blank" && filename!=this.nom_blanc_mostres){
             this.nom_blanc_recovery=filename;
           }
+
+          //detecta blank mostres TODO
 
           //comprova blank MM
           if(filename==this.nom_blanc_MM){
@@ -660,7 +670,10 @@
             }
           }
 
-          return {family,filename,area,peak_label};
+          //exclude for linear regression
+          let exclude=true;
+
+          return {family,filename,area,peak_label,exclude};
         });
 
         this.sheets_processats++;
@@ -685,8 +698,16 @@
             x = this.calcula_area_minus_blank(sheet,family,r.area);
           }
 
-          let y = parseInt(r.filename.split("_")[1]);
-          if(isNaN(y)){y=0}
+          let y = 0;
+          let filename_split = r.filename.split("_");
+          for(let i=1;i<filename_split.length;i++){
+            let token = filename_split[i];
+            let token_parsed = parseInt(token);
+            if(!isNaN(token_parsed)){
+              y = token_parsed;
+              break;
+            }
+          }
 
           return {x,y};
         }).filter(p=>p.x!="N/F");
@@ -725,8 +746,16 @@
 
           if(ppb===false) return;
 
-          let teoric = parseInt(row.filename.split("_")[1]);
-          if(isNaN(teoric)) teoric=100;
+          let teoric = 100;
+          let filename_split = row.filename.split("_");
+          for(let i=1;i<filename_split.length;i++){
+            let token = filename_split[i];
+            let token_parsed = parseInt(token);
+            if(!isNaN(token_parsed)){
+              teoric = token_parsed;
+              break;
+            }
+          }
 
           let rec = 100*ppb/teoric; //percentatge
 
