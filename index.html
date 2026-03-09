@@ -86,13 +86,39 @@
   <b>ORBITRAP automatic output files processing</b>
 </div><hr>
 
+
 <div id=app>
-  <!--boto carregar excel-->
   <div v-if="!treballant && sheets_processats==0">
+    <!--instruccions-->
+    <details>
+      <summary><b>[info] Mandatory format of the input excel</b></summary>
+      <ul>
+        <li>Format ".xlsx"</li>
+        <li>Column "Filename"</li>
+        <li>Column "Area"</li>
+        <li>Column "Peak Label"</li>
+        <li>Filenames:
+          <ul>
+            <li>"CalCurve"</li>
+            <li>"MM"</li>
+            <li>"Blank"</li>
+            <li>"Recovery"</li>
+          </ul>
+          Every other filename will be considered as "samples"
+        </li>
+        <li> Blank name for MM:      "MM_Blank_AIF" </li>
+        <li> Blank name for samples: "Blank_HPLC_AIF" </li>
+        <li> The name of the blank for the recovery will be deduced </li>
+      </ul>
+    </details><hr>
+
+    <!--seleccionar valor peak label-->
     <p>
       Column "Peak Label" value to filter:
       <input v-model="peak_label">
     </p>
+
+    <!--boto carregar excel-->
     <input type=file @change="load_excel($event)">
   </div>
 
@@ -148,11 +174,16 @@
       <!--menú per activar/desactivar blancs-->
       <table border=1>
         <tr>
-          <th colspan=2 left>Subtract blank from</th>
+          <th left>Subtract blank from</th>
+          <th left>Filename</th>
+          <th left></th>
         </tr>
         <tr>
           <td :style="{color:filenames_seleccionats.has('MM')?'':'#ccc'}">
-            MM ("MM_Blank_AIF")
+            MM
+          </td>
+          <td>
+            <code>"{{nom_blanc_MM}}"</code>
           </td>
           <td>
             <label><input type=radio v-model="restar_blancs.MM" :value="true"  :disabled="!filenames_seleccionats.has('MM')"> sí</label>
@@ -161,7 +192,10 @@
         </tr>
         <tr>
           <td :style="{color:filenames_seleccionats.has('Recovery')?'':'#ccc'}">
-            Recovery (?)
+            Recovery
+          </td>
+          <td>
+            <code>"{{nom_blanc_recovery}}"</code>
           </td>
           <td>
             <label><input type=radio v-model="restar_blancs.recovery" :value="true"  :disabled="!filenames_seleccionats.has('Recovery')"> sí</label>
@@ -170,7 +204,10 @@
         </tr>
         <tr>
           <td :style="{color:cal_mostrar_taula_mostres?'':'#ccc'}">
-            Samples ("Blank_HPLC_AIF")
+            Samples
+          </td>
+          <td>
+            <code>"{{nom_blanc_mostres}}"</code>
           </td>
           <td>
             <label><input type=radio v-model="restar_blancs.mostres" :value="true"  :disabled="!cal_mostrar_taula_mostres"> sí</label>
@@ -324,7 +361,9 @@
                   </td>
 
                   <td number>
-                    {{quantifica_area(sheet, area_blanked)}}
+                    <div v-for="ppb in [quantifica_area(sheet, area_blanked)]">
+                      {{ppb}}
+                    </div>
                   </td>
 
                   <td empty>&empty;</td>
@@ -475,7 +514,7 @@
       sheets:null, //array sheets processats
       sheets_processats:0, //number
 
-      //filenames visibles a les taules
+      //filenames fixes visibles
       filenames_seleccionats: new Set(["CalCurve","MM","Blank","Recovery"]),
 
       //regressio
@@ -497,7 +536,6 @@
         "MM",       //"matrix match"
         "Blank",    //blancs mostres
         "Recovery", //recovery
-        "QC",       //quality control
       ]),
 
       //restar blancs
@@ -509,6 +547,11 @@
 
       //forçar regressió utilitzada
       regressió_utilitzada:"best",
+
+      //noms blancs configurables per l'usuari
+      nom_blanc_MM:"MM_Blank_AIF",
+      nom_blanc_recovery:"Blank_recovery_AIF",
+      nom_blanc_mostres:"Blank_HPLC_AIF",
     }},
 
     methods:{
@@ -572,14 +615,24 @@
           let family     = filename.split("_")[0];
 
           //comprova si aquesta area correspon a un blank
-          if(filename=="MM_Blank_AIF"){
+          if(family=="Blank" && filename!=this.nom_blanc_mostres){
+            this.nom_blanc_recovery=filename;
+          }
+
+          //comprova blank MM
+          if(filename==this.nom_blanc_MM){
             if(area!="N/F"){
-              blanks[family] = area;
+              blanks.MM = area;
             }
           }
-          if(filename=="Blank_HPLC_AIF"){
+          if(filename==this.nom_blanc_mostres){
             if(area!="N/F"){
               blanks.mostres = area;
+            }
+          }
+          if(filename==this.nom_blanc_recovery){
+            if(area!="N/F"){
+              blanks.recovery = area;
             }
           }
 
@@ -640,7 +693,12 @@
 
           if(ppb===false) return;
 
-          recovery.push(ppb);
+          let teoric = parseInt(row.filename.split("_")[1]);
+          if(isNaN(teoric)) teoric=100;
+
+          let rec = 100*ppb/teoric; //percentatge
+
+          recovery.push(rec);
         });
 
         let N = recovery.length;
@@ -688,7 +746,7 @@
 
         //aplica formula recta (y=mx+n)
         let y = reg.m*area + reg.n;
-        if(y<0) y=0;
+        //if(y<0) y=0;
         return y;
       },
 
@@ -712,7 +770,7 @@
         //Recovery
         if(family=="Recovery"){
           if(this.restar_blancs.recovery){
-            let bl = sheet.blanks.Recovery;
+            let bl = sheet.blanks.recovery;
             if(bl) blank=bl;
           }
           return area-blank;
