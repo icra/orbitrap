@@ -148,7 +148,10 @@
       <!--menú per activar/desactivar filenames visibles-->
       <table border=1>
         <tr>
-          <th colspan=2 left>Visible Filenames</th>
+          <th colspan=2 left>
+            Visible filenames
+            <button @click="filenames_seleccionats.clear()" :disabled="filenames_seleccionats.size==0" title="unselect all">X</button>
+          </th>
         </tr>
         <tr v-for="set,i in [noms_families_fixes, get_noms_mostres]">
           <td>
@@ -179,39 +182,36 @@
           <th left></th>
         </tr>
         <tr>
-          <td :style="{color:filenames_seleccionats.has('MM')?'':'#ccc'}">
-            MM
-          </td>
+          <td>MM</td>
+          <td><code>"{{nom_blanc_MM}}"</code></td>
           <td>
-            <code>"{{nom_blanc_MM}}"</code>
-          </td>
-          <td>
-            <label><input type=radio v-model="restar_blancs.MM" :value="true"  :disabled="!filenames_seleccionats.has('MM')"> sí</label>
-            <label><input type=radio v-model="restar_blancs.MM" :value="false" :disabled="!filenames_seleccionats.has('MM')"> no</label>
+            <label><input type=radio v-model="restar_blancs.MM" :value="true" > sí</label>
+            <label><input type=radio v-model="restar_blancs.MM" :value="false"> no</label>
           </td>
         </tr>
         <tr>
-          <td :style="{color:filenames_seleccionats.has('Recovery')?'':'#ccc'}">
-            Recovery
-          </td>
+          <td>Recovery</td>
+          <td><code>"{{nom_blanc_recovery}}"</code></td>
           <td>
-            <code>"{{nom_blanc_recovery}}"</code>
-          </td>
-          <td>
-            <label><input type=radio v-model="restar_blancs.recovery" :value="true"  :disabled="!filenames_seleccionats.has('Recovery')"> sí</label>
-            <label><input type=radio v-model="restar_blancs.recovery" :value="false" :disabled="!filenames_seleccionats.has('Recovery')"> no</label>
+            <label><input type=radio v-model="restar_blancs.recovery" :value="true" > sí</label>
+            <label><input type=radio v-model="restar_blancs.recovery" :value="false"> no</label>
           </td>
         </tr>
         <tr>
-          <td :style="{color:cal_mostrar_taula_mostres?'':'#ccc'}">
-            Samples
-          </td>
+          <td>Samples</td>
           <td>
             <code>"{{nom_blanc_mostres}}"</code>
+            <div>
+              <table>
+                <tr v-for="val in Object.values(blanks_de_mostres_detectats)" style="font-size:smaller">
+                  <td><code>"{{val}}"</code></td>
+                </tr>
+              </table>
+            </div>
           </td>
           <td>
-            <label><input type=radio v-model="restar_blancs.mostres" :value="true"  :disabled="!cal_mostrar_taula_mostres"> sí</label>
-            <label><input type=radio v-model="restar_blancs.mostres" :value="false" :disabled="!cal_mostrar_taula_mostres"> no</label>
+            <label><input type=radio v-model="restar_blancs.mostres" :value="true" > sí</label>
+            <label><input type=radio v-model="restar_blancs.mostres" :value="false"> no</label>
           </td>
         </tr>
       </table>
@@ -311,11 +311,11 @@
       <b>Results ({{get_sheets_filtrats.length}}/{{sheets.length}})</b>
     </div>
 
-    <div v-if="get_sheets_filtrats.length==0">~No results</div>
+    <div v-if="get_sheets_filtrats.length==0" style="font-size:larger;color:#666">~No results</div>
 
     <div v-if="get_sheets_filtrats">
       <p>
-        <button @click="descarregar_fitxer_final()">
+        <button @click="descarregar_fitxer_final()" :disabled="get_sheets_filtrats.length==0">
           export results xlsx
         </button>
       </p>
@@ -328,12 +328,27 @@
             <span hover_underline @click="filtre_nom_compost=sheet.nom">
               <span style="font-size:larger">{{sheet.nom}}</span>
             </span>
+
+            <!--taula blanks-->
+            <div v-if="Object.values(sheet.blanks).length">
+              <br>
+              <table border=1 style="font-size:smaller;color:black">
+                <tr>
+                  <th>blank</th>
+                  <th>area</th>
+                </tr>
+                <tr v-for="[key,val] in Object.entries(sheet.blanks)">
+                  <td>{{key}}</td>
+                  <td>{{val}}</td>
+                </tr>
+              </table>
+            </div>
           </td>
 
           <td valigntop>
             <table border=1 class=subtaula>
               <tr class=subtaula_header>
-                <td>filename type</td>
+                <td>type</td>
                 <td>filename</td>
                 <td>area (raw)</td>
                 <td>area (-blank)</td>
@@ -343,7 +358,7 @@
                   <div>ppb computed</div>
                   <div><small>(appl. recovery)</small></div>
                 </td>
-                <td>
+                <td title="exclude for linear regression calculation">
                   exclude
                 </td>
               </tr>
@@ -363,7 +378,12 @@
                   </td>
 
                   <td number>
-                    {{row.area}}
+                    <div v-if="row.area=='N/F'" empty>
+                      {{row.area}}
+                    </div>
+                    <div v-else>
+                      {{row.area}}
+                    </div>
                   </td>
 
                   <td number>
@@ -373,23 +393,24 @@
                   </td>
 
                   <td number>
-                    <div v-for="ppb_teoric in [parseInt(row.filename.split('_')[1])]">
-                      <div v-if="ppb_teoric">
-                        {{ppb_teoric}}
-                      </div>
-                      <div v-else>0</div>
+                    <div v-if="row.ppb_teoric!=null">
+                      {{row.ppb_teoric}}
                     </div>
+                    <div v-else empty>&empty;</div>
                   </td>
 
                   <td number>
-                    <div v-for="ppb in [quantifica_area(sheet, area_blanked)]">
-                      {{ppb}}
+                    <div v-for="ppb_computed in [quantifica_area(sheet, area_blanked)]">
+                      <div v-if="ppb_computed">
+                        {{ppb_computed}}
+                      </div>
+                      <div v-else empty>&empty;</div>
                     </div>
                   </td>
 
                   <td empty>&empty;</td>
 
-                  <td v-if="row.family=='CalCurve' || row.family=='MM'">
+                  <td v-if="['CalCurve','MM','Recovery'].includes(row.family)" center>
                     <input type=checkbox v-model="row.exclude">
                   </td>
                 </tr>
@@ -408,9 +429,16 @@
                   <td monospace>
                     {{row.filename}}
                   </td>
+
                   <td number>
-                    {{row.area}}
+                    <div v-if="row.area=='N/F'" empty>
+                      {{row.area}}
+                    </div>
+                    <div v-else>
+                      {{row.area}}
+                    </div>
                   </td>
+
                   <td number>
                     <div v-if="row.area!=area_blanked">
                       {{area_blanked}}
@@ -420,13 +448,18 @@
                   <td empty>&empty;</td>
 
                   <td number>
-                    {{quantifica_area(sheet, area_blanked)}}
+                    <div v-for="ppb_computed in [quantifica_area(sheet, area_blanked)]">
+                      <div v-if="ppb_computed">
+                        {{ppb_computed}}
+                      </div>
+                      <div v-else empty>&empty;</div>
+                    </div>
                   </td>
 
                   <td number >
                     <div v-for="rec in [sheet.recovery]">
                       <div v-if="rec">
-                        {{quantifica_area(sheet, area_blanked)*rec/100}}
+                        {{quantifica_area(sheet, area_blanked)*100/rec}}
                       </div>
                     </div>
                   </td>
@@ -449,7 +482,7 @@
                         :millor_regresio="calcula_millor_regressio(sheet)==tipus_regressio"
                       >
                         <small>
-                          Regressió {{tipus_regressio}} (ppb = m·area + n)
+                          Regression {{tipus_regressio=='CC'?'CalCurve':tipus_regressio}} (ppb = m·area + n)
                         </small>
                       </th>
                     </tr>
@@ -466,8 +499,8 @@
                       <td number>{{sheet.regressio[tipus_regressio].r_squared}}</td>
                     </tr>
                     <tr>
-                      <td>punts</td>
-                      <td number>{{sheet.regressio[tipus_regressio].N}}</td>
+                      <td>#points</td>
+                      <td center monospace>{{sheet.regressio[tipus_regressio].N}}</td>
                     </tr>
                   </table>
                 </div>
@@ -568,9 +601,9 @@
 
       //restar blancs
       restar_blancs:{
-        MM       : false,
-        mostres  : false,
-        recovery : false,
+        MM       : true,
+        mostres  : true,
+        recovery : true,
       },
 
       //forçar regressió utilitzada
@@ -583,6 +616,9 @@
 
       //configuracio mostrar "NFs" (valors àrea que no han sortit bé)
       mostrar_area_NF:true,
+
+      //blanks de mostres detectats (family=>filename)
+      blanks_de_mostres_detectats:{},
     }},
 
     methods:{
@@ -641,19 +677,35 @@
           }
         }).map(r=>{
           let filename   = r.values[index_col_filename];
+          let family     = filename.split("_")[0];
           let area       = r.values[index_col_area];
           let peak_label = r.values[index_col_peak_label];
-          let family     = filename.split("_")[0];
+          let ppb_teoric = null;
 
-          //comprova si aquesta area correspon a un blank
+          //comprova si aquesta dada correspon a un blank
           //sino, assigna'l a recovery
           if(family=="Blank" && filename!=this.nom_blanc_mostres){
             this.nom_blanc_recovery=filename;
           }
 
-          //detecta blank mostres TODO
+          //calcula ppb_teoric
+          if(family=="CalCurve"||family=="MM"||family=="Recovery"){
+            ppb_teoric=0;//diferencia de null
+            let filename_split = filename.split("_");
+            for(let i=1;i<filename_split.length;i++){
+              let token = filename_split[i];
+              let token_parsed = parseInt(token);
+              if(!isNaN(token_parsed)){
+                ppb_teoric = token_parsed;
+                break;
+              }
+            }
+          }
+          if(family=="Blank"){
+            ppb_teoric=0;
+          }
 
-          //comprova blank MM
+          //estableix valors dels blancs
           if(filename==this.nom_blanc_MM){
             if(area!="N/F"){
               blanks.MM = area;
@@ -661,19 +713,27 @@
           }
           if(filename==this.nom_blanc_mostres){
             if(area!="N/F"){
-              blanks.mostres = area;
+              blanks.Samples = area;
             }
           }
           if(filename==this.nom_blanc_recovery){
             if(area!="N/F"){
-              blanks.recovery = area;
+              blanks.Recovery = area;
+            }
+          }
+          if(!this.noms_families_fixes.has(family) && filename.toLowerCase().includes("blank")){
+            this.blanks_de_mostres_detectats[family]=filename;
+            if(area=="N/F"){
+              blanks[family]=0;
+            }else{
+              blanks[family]=area;
             }
           }
 
           //exclude for linear regression
-          let exclude=true;
+          let exclude=false;
 
-          return {family,filename,area,peak_label,exclude};
+          return {family,filename,area,peak_label,exclude,ppb_teoric};
         });
 
         this.sheets_processats++;
@@ -691,7 +751,7 @@
 
         let rows = sheet.rows.filter(r=>r.family==family);
 
-        let punts = rows.map(r=>{
+        let punts = rows.filter(r=>!r.exclude).map(r=>{
           let x = r.area;
 
           if(family=="MM"){
@@ -727,7 +787,7 @@
         //mitjana dels recoveries
         let recovery=[];//init empty array
 
-        let rows = sheet.rows.filter(r=>r.family=="Recovery");
+        let rows = sheet.rows.filter(r=>r.family=="Recovery"&&!r.exclude);
 
         rows.forEach(row=>{
           let area = row.area; //number | string ("N/F")
@@ -737,7 +797,7 @@
           //restar blanc recovery
           if(this.restar_blancs.recovery){
             let blank=0;
-            let bl = sheet.blanks.recovery;
+            let bl = sheet.blanks.Recovery;
             if(bl) blank=bl;
             area -= blank;
           }
@@ -759,11 +819,12 @@
 
           let rec = 100*ppb/teoric; //percentatge
 
-          recovery.push(rec);
+          if(rec>0){
+            recovery.push(rec);
+          }
         });
 
         let N = recovery.length;
-
         if(N==0) return false;
 
         return recovery.reduce((p,c)=>p+c,0)/N;
@@ -831,7 +892,7 @@
         //Recovery
         if(family=="Recovery"){
           if(this.restar_blancs.recovery){
-            let bl = sheet.blanks.recovery;
+            let bl = sheet.blanks.Recovery;
             if(bl) blank=bl;
           }
           return area-blank;
@@ -839,8 +900,13 @@
 
         if(this.get_noms_mostres.has(family)){
           if(this.restar_blancs.mostres){
-            let bl = sheet.blanks.mostres;
-            if(bl) blank=bl;
+            let bl = sheet.blanks[family];
+            if(bl===undefined){
+              bl = sheet.blanks.Samples;
+              if(bl) blank=bl;
+            }else{
+              blank=bl;
+            }
           }
           return area-blank;
         }
@@ -848,33 +914,56 @@
         return area;
       },
 
-      //TODO wip
+      //wip TODO
       descarregar_fitxer_final(){
         let wb = new ExcelJS.Workbook();
 
-        this.get_sheets_filtrats.forEach(sheet=>{
-          let sh = wb.addWorksheet(sheet.nom);
+        //una fulla per cada compost
+        this.get_sheets_filtrats.forEach((sheet,i)=>{
+          let sh = wb.addWorksheet(`Compound ${i+1}`);
 
           //header
           sh.addRow(['Compound','Filename','area(raw)','area(-blank)','ppb theoric','ppb computed','ppb computed (+recovery)']);
 
-          //values
-          sheet.rows.forEach(row=>{
-            let area_blanked = this.calcula_area_minus_blank(sheet,row.family,row.area);
-            let ppb_theoric  = "TODO";
+          //agafa files
+          let rows = [...sheet.rows];
+
+          //filtra per exclude
+          rows = rows.filter(r=>!r.exclude);
+
+          //filtra per area=="N/F"
+          if(this.mostrar_area_NF==false){
+            rows = rows.filter(r=>r.area!="N/F");
+          }
+
+          //filtra per filenames seleccionats
+          rows = rows.filter(r=>{
+            return this.filenames_seleccionats.has(r.family);
+          });
+
+          //processa rows
+          rows.forEach(row=>{
+            let family       = row.family;
+            let area         = row.area;
+            let area_blanked = this.calcula_area_minus_blank(sheet,family,area);
+            let ppb_teoric   = row.ppb_teoric;
             let ppb          = this.quantifica_area(sheet,area_blanked);
             let rec          = sheet.recovery || 0;
-            let ppb_rec      = ppb*rec/100;
+            let ppb_rec      = null;
+
+            if(this.get_noms_mostres.has(family) && rec){
+              ppb_rec = ppb*100/rec;
+            }
 
             sh.addRow([
               sheet.nom,
               row.filename,
-              row.area,
+              area,
               area_blanked,
-              ppb_theoric,
+              ppb_teoric,
               ppb,
-              ppb_rec
-              ]); //TODO
+              ppb_rec,
+            ]);
           });
         });
 
