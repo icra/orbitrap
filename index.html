@@ -393,7 +393,7 @@
                   </td>
 
                   <td number>
-                    <div v-if="row.ppb_teoric!=null">
+                    <div v-if="row.ppb_teoric!=null" center>
                       {{row.ppb_teoric}}
                     </div>
                     <div v-else empty>&empty;</div>
@@ -922,7 +922,25 @@
         this.get_sheets_filtrats.forEach((sheet,i)=>{
           let sh = wb.addWorksheet(`Compound ${i+1}`);
 
-          //header
+          //regressions info
+          sh.addRow(['Regression','m','n','r2','#points']);
+          if(sheet.regressio.CC){
+            let reg = sheet.regressio.CC;
+            sh.addRow(['CalCurve', reg.m, reg.n, reg.r_squared, reg.N]);
+          }
+          if(sheet.regressio.MM){
+            let reg = sheet.regressio.MM;
+            sh.addRow(['MM', reg.m, reg.n, reg.r_squared, reg.N]);
+          }
+          sh.addRow(['']); //espai
+
+          //recovery info
+          if(sheet.recovery){
+            sh.addRow(['Recovery (%)', sheet.recovery]);
+            sh.addRow(['']); //espai
+          }
+
+          //lectures
           sh.addRow(['Compound','Filename','area(raw)','area(-blank)','ppb theoric','ppb computed','ppb computed (+recovery)']);
 
           //agafa files
