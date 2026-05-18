@@ -79,6 +79,9 @@
       cursor:pointer;
       text-decoration:underline;
     }
+    [small]{
+      font-size:smaller;
+    }
   </style>
 </head><body>
 
@@ -97,28 +100,28 @@
       <summary><b>[info] Mandatory format of the input excel</b></summary>
       <ul>
         <li>Format ".xlsx"</li>
-
-        <li>Column  "Compound"    (text) </li>         
-        <li>Column  "Formula"     (text) </li>         
-        <li>Column  "RT"          (number) </li>  
-        <li>Column  "Adduct"      (text) </li>  
-        <li>Column  "Type"        (text) </li>  
-        <li>Column  "Status"      (text) </li>  
-        <li>Column  "Sample Type" (text) </li>
-
-        <li>Column "Filename" (text)   </li>
-        <li>Column "Area"     (text)   </li>
-        <li>Column "Peak Label" (text) </li>
-        <li>Filenames (TBC):
-          <ul>
-            <li>"CalCurve"</li>
-            <li>"MM"</li>
-            <li>"Blank"</li>
-            <li>"Recovery"</li>
-          </ul>
+        <li>
+          <details open>
+            <summary>Columns</summary>
+            <ul>
+              <li>Column "Compound"    (text)       </li>
+              <li>Column "Formula"     (text)       </li>
+              <li>Column "RT"          (number)     </li>
+              <li>Column "RT Delta"    (number)     </li>
+              <li>Column "m/z Delta"   (number)     </li>
+              <li>Column "S/N"         (number)     </li>
+              <li>Column "Num Isotopes Matched" (?) </li>
+              <li>Column "Adduct"      (text) ["M+H","M-H","N/A"]   </li>
+              <li>Column "Type"        (text) ["Target Compound"]   </li>
+              <li>Column "Status"      (text) ["Processed"]         </li>
+              <li>Column "Sample Type" (text) ["Cal Std","Unknown"] </li>
+              <li>Column "Filename"    (text)                       </li>
+              <li>Column "Area"        (number)                     </li>
+              <li>Column "Peak Label"  (text) ["T1","T1C1","T1C2"]  </li>
+            </ul>
+          </details>
         </li>
-
-        <li>Blank name for MM:      "MM_Blank_AIF" </li>
+        <li>Blank name for MM:      "MM_Blank_AIF"   </li>
         <li>Blank name for samples: "Blank_HPLC_AIF" </li>
         <li>The name of the blank for the recovery will be deduced </li>
       </ul>
@@ -142,10 +145,20 @@
     <div>&#9203; working...</div>
   </div>
 
-  <div v-if="sheets_processats">
+  <div v-if="sheets_processats && fitxer_carregat">
     <ul>
+      <li>
+        Loaded file: <b><code>{{fitxer_carregat.name}}</code></b>&nbsp;
+        <small>({{(fitxer_carregat.size/1024/1024).toFixed(2)}} mb)</small>
+      </li>
       <li>Filtered by "Peak Label" column value = "{{peak_label}}"</li>
-      <li>Total number of compounds loaded: {{sheets_processats}} (each sheet represents a compound)</li>
+      <li>Number of compounds: {{sheets_processats}} (each sheet represents a compound)</li>
+      <li v-if="warnings.size" style="background:lightyellow">
+        Warnings:
+        <ul>
+          <li v-for="war in warnings">{{war}}</li>
+        </ul>
+      </li>
     </ul>
   </div><hr>
 
@@ -162,7 +175,12 @@
         <tr>
           <th colspan=2 left>
             Visible filenames
-            <button @click="filenames_seleccionats.clear()" :disabled="filenames_seleccionats.size==0" title="unselect all">X</button>
+            <button @click="filenames_seleccionats.clear()" :disabled="filenames_seleccionats.size==0" title="unselect all">
+              none
+            </button>
+            <button @click="select_all_filenames()" :disabled="filenames_seleccionats.size==get_filenames.length" title="select all">
+              all
+            </button>
           </th>
         </tr>
         <tr v-for="set,i in [noms_families_fixes, get_noms_mostres]">
@@ -189,15 +207,15 @@
       <!--menú per activar/desactivar blancs-->
       <table border=1>
         <tr>
-          <th left>Subtract blank from</th>
+          <th left>Blanks</th>
           <th left>Filename</th>
-          <th left></th>
+          <th left>Subtract?</th>
         </tr>
         <tr>
           <td>MM</td>
           <td><code>"{{nom_blanc_MM}}"</code></td>
           <td>
-            <label><input type=radio v-model="restar_blancs.MM" :value="true" > sí</label>
+            <label><input type=radio v-model="restar_blancs.MM" :value="true" > yes</label>
             <label><input type=radio v-model="restar_blancs.MM" :value="false"> no</label>
           </td>
         </tr>
@@ -205,7 +223,7 @@
           <td>Recovery</td>
           <td><code>"{{nom_blanc_recovery}}"</code></td>
           <td>
-            <label><input type=radio v-model="restar_blancs.recovery" :value="true" > sí</label>
+            <label><input type=radio v-model="restar_blancs.recovery" :value="true" > yes</label>
             <label><input type=radio v-model="restar_blancs.recovery" :value="false"> no</label>
           </td>
         </tr>
@@ -222,7 +240,7 @@
             </div>
           </td>
           <td>
-            <label><input type=radio v-model="restar_blancs.mostres" :value="true" > sí</label>
+            <label><input type=radio v-model="restar_blancs.mostres" :value="true" > yes</label>
             <label><input type=radio v-model="restar_blancs.mostres" :value="false"> no</label>
           </td>
         </tr>
@@ -242,12 +260,21 @@
       </table>
 
       <table border=1>
-        <tr><td><label><input type=checkbox> Area peak              </label></td></tr>
-        <tr><td><label><input type=checkbox> RT Delta ±0.3          </label></td></tr>
-        <tr><td><label><input type=checkbox> m/z Delta ±5ppm        </label></td></tr>
-        <tr><td><label><input type=checkbox> S/N&ge;10              </label></td></tr>
-        <tr><td><label><input type=checkbox> Ion ratio              </label></td></tr>
-        <tr><td><label><input type=checkbox> Number Isotopes Matched</label></td></tr>
+        <tr v-for="fil in filtres_maig_2026">
+          <td>
+            <label>
+              <input type="checkbox" v-model="fil.actiu" :disabled="fil.valors==false">
+              <span v-html="fil.text"></span>
+            </label>
+          </td>
+          <td v-if="fil.valors">
+            <input type=number v-model="fil.valors[0]" :disabled="!fil.actiu" style="field-sizing:content">
+            <input type=number v-model="fil.valors[1]" :disabled="!fil.actiu" style="field-sizing:content" v-if="isFinite(fil.valors[1])">
+          </td>
+          <td v-if="!fil.valors">
+            (ask mcelic)
+          </td>
+        </tr>
       </table>
 
       <table border=1>
@@ -393,14 +420,27 @@
             <table border=1 class=subtaula>
               <tr class=subtaula_header>
                 <td>groups</td>
+                <td>sample type</td>
+                <td>adduct</td>
+                <td>RT</td>
+                <td>RT Delta</td>
+                <td>m/z Delta</td>
+                <td>S/N</td>
+
+                <td>type</td>
+                <td>status</td>
+
                 <td>filename</td>
                 <td>area (raw)</td>
                 <td>area (-blank)</td>
-                <td title="ppb theoric">level</td>
+                <td>
+                  <div>ppb theoric</div>
+                  <div small>("level")</div>
+                </td>
                 <td>ppb computed</td>
                 <td>
                   <div>ppb computed</div>
-                  <div><small>(appl. recovery)</small></div>
+                  <div small>(appl. recovery)</div>
                 </td>
                 <td title="exclude for linear regression calculation">
                   exclude
@@ -408,7 +448,7 @@
               </tr>
 
               <!--calibration-->
-              <tbody v-for="row in sheet.rows" v-if="cal_mostrar_taula_calibracio">
+              <tbody v-for="row in filtra_rows(sheet)" v-if="cal_mostrar_taula_calibracio">
                 <tr
                   v-if="
                     filenames_seleccionats.has(row.family) && noms_families_fixes.has(row.family)
@@ -417,6 +457,23 @@
                   v-for="area_blanked in [calcula_area_minus_blank(sheet, row.family, row.area)]"
                 >
                   <td style="color:#aaa">calibration</td>
+                  <td center style="color:#aaa" small>{{row.sample_type}}</td>
+                  <td center style="color:#aaa" small>{{row.adduct}}</td>
+                  <td number>{{row.RT}}</td>
+                  <td number>{{row.RT_Delta}}</td>
+                  <td number>
+                    <div v-if="row.mz_Delta=='N/F'" empty>
+                      {{row.mz_Delta}}
+                    </div>
+                    <div v-else>
+                      {{row.mz_Delta}}
+                    </div>
+                  </td>
+                  <td number>{{row.SN}}</td>
+
+                  <td center style="color:#aaa" small>{{row.type}}</td>
+                  <td center style="color:#aaa" small>{{row.status}}</td>
+
                   <td monospace>
                     {{row.filename}}
                   </td>
@@ -461,7 +518,7 @@
               </tbody>
 
               <!--samples-->
-              <tbody v-for="row in sheet.rows" v-if="cal_mostrar_taula_mostres">
+              <tbody v-for="row in filtra_rows(sheet)" v-if="cal_mostrar_taula_mostres">
                 <tr
                   v-if="
                     filenames_seleccionats.has(row.family) && get_noms_mostres.has(row.family)
@@ -470,6 +527,23 @@
                   v-for="area_blanked in [calcula_area_minus_blank(sheet, row.family, row.area)]"
                 >
                   <td style="color:#aaa">sample</td>
+                  <td center style="color:#aaa" small>{{row.sample_type}}</td>
+                  <td center style="color:#aaa" small>{{row.adduct}}</td>
+                  <td number>{{row.RT}}</td>
+                  <td number>{{row.RT_Delta}}</td>
+                  <td number>
+                    <div v-if="row.mz_Delta=='N/F'" empty>
+                      {{row.mz_Delta}}
+                    </div>
+                    <div v-else>
+                      {{row.mz_Delta}}
+                    </div>
+                  </td>
+                  <td number>{{row.SN}}</td>
+
+                  <td center style="color:#aaa" small>{{row.type}}</td>
+                  <td center style="color:#aaa" small>{{row.status}}</td>
+
                   <td monospace>
                     {{row.filename}}
                   </td>
@@ -489,7 +563,12 @@
                     </div>
                   </td>
 
-                  <td empty>&empty;</td>
+                  <td number>
+                    <div v-if="row.ppb_teoric!=null" center>
+                      {{row.ppb_teoric}}
+                    </div>
+                    <div v-else empty>&empty;</div>
+                  </td>
 
                   <td number>
                     <div v-for="ppb_computed in [quantifica_area(sheet, area_blanked)]">
@@ -614,10 +693,12 @@
       treballant:false,
       err:"", //missatge error
       wb:null, //objecte workbook que ha sigut carregat
+      fitxer_carregat:null, //objecte "File"
 
       //main array
       sheets:null, //array sheets processats
       sheets_processats:0, //number
+      warnings:new Set(), //llista de warnings
 
       //filenames fixes visibles
       filenames_seleccionats: new Set(["CalCurve","MM","Blank","Recovery"]),
@@ -628,8 +709,8 @@
 
       //recovery thresholds
       recovery_thresholds:true,
-      recovery_threshold_lo:85,//60,
-      recovery_threshold_hi:86,//120,
+      recovery_threshold_lo:85,//60, TODO
+      recovery_threshold_hi:86,//120, TODO
 
       //filtre nom compost
       filtre_nom_compost:"",
@@ -637,6 +718,7 @@
       //filenames que NO són mostres
       //aquests noms surten a tots els excels, són fixos
       noms_families_fixes:new Set([
+        //new:to be filled by "processa_sheet" function
         "CalCurve", //"calibration curve"
         "MM",       //"matrix match"
         "Blank",    //blancs mostres
@@ -667,16 +749,30 @@
       //factor de concentracio
       vol_initial_sample_ml:250,
       vol_final_extract_ml:0.5,
+
+      //filtres nous maig 2026
+      filtres_maig_2026:[
+        {columna:"area",            text:"Area peak &ge;",             actiu:false, valors:[1e5,  Infinity]},
+        {columna:"RT_Delta",        text:"RT Delta ±",                 actiu:false, valors:[-0.3, 0.3]},
+        {columna:"mz_Delta",        text:"m/z Delta ±",                actiu:false, valors:[-5,   5]},
+        {columna:"SN",              text:"S/N &ge;",                   actiu:false, valors:[10,   Infinity]},
+        {columna:"ion_ratio",       text:"Ion Ratio",                  actiu:false, valors:false}, //TODO
+        {columna:"response",        text:"Response",                   actiu:false, valors:false}, //TODO
+        {columna:"num_isotopes",    text:"Num Isotopes Matched",       actiu:false, valors:false}, //TODO
+        {columna:"isotopic_pattern",text:"Isotopic Pattern Score (%)", actiu:false, valors:false}, //TODO
+      ],
     }},
 
     methods:{
       async load_excel(event){
         this.treballant = true;
         this.error = "";
+
         let file = event.target.files[0];
         let wb = new ExcelJS.Workbook();
         this.wb = wb;
         try{
+          this.fitxer_carregat = file;
           await wb.xlsx.load(file);
           this.sheets = wb.worksheets.map(sheet=>{
             return this.processa_sheet(sheet);
@@ -722,20 +818,50 @@
           "type"        :sheet.columns.find(c=>c.values[1]=="Type")?._number,
           "status"      :sheet.columns.find(c=>c.values[1]=="Status")?._number,
           "sample_type" :sheet.columns.find(c=>c.values[1]=="Sample Type")?._number,
+          "level"       :sheet.columns.find(c=>c.values[1]=="Level")?._number,
+
+          //more rows
+          "RT_Delta"     :sheet.columns.find(c=>c.values[1]=="RT Delta")?._number,
+          "mz_Delta"     :sheet.columns.find(c=>c.values[1]=="m/z (Delta)")?._number,
+          "SN"           :sheet.columns.find(c=>c.values[1]=="S/N")?._number,
+          "ion_ratio"    :sheet.columns.find(c=>c.values[1]=="Ion Ratio")?._number,
+          "response"     :sheet.columns.find(c=>c.values[1]=="Response")?._number,
+          "num_isotopes" :sheet.columns.find(c=>c.values[1]=="Num Isotopes Matched")?._number,
+          "isotopic_ptrn":sheet.columns.find(c=>c.values[1]=="Isotopic Pattern Score (%)")?._number,
         };
 
         //throw error si no troba alguna columna
         let entry_index_undefined = Object.entries(index_col).find(([key,val])=>val==undefined);
         if(entry_index_undefined){
           let key = entry_index_undefined[0];
-          throw(`Column "${key}" not found`);
+          let dicc={
+            "filename"     :"Filename",
+            "area"         :"Area",
+            "peak_label"   :"Peak Label",
+            "formula"      :"Formula",
+            "RT"           :"RT",
+            "adduct"       :"Adduct",
+            "type"         :"Type",
+            "status"       :"Status",
+            "sample_type"  :"Sample Type",
+            "level"        :"Level",
+            "RT_Delta"     :"RT Delta",
+            "mz_Delta"     :"m/z (Delta)",
+            "SN"           :"S/N",
+            "ion_ratio"    :"Ion Ratio",
+            "response"     :"Response",
+            "num_isotopes" :"Num Isotopes Matched",
+            "isotopic_ptrn":"Isotopic Pattern Score (%)",
+          };
+          let msg = `Column "${dicc[key]}" not found`;
+          this.warnings.add(msg);
+          //console.warn(msg);
         }
 
         //blank per família (area=number)
         let blanks={}; //{"family"=>area}
 
         //filtra per "Peak Label"=="T1"
-        //i retorna [filename, area, peak_label]
         let rows = sheet._rows.filter(r=>{
           if(this.peak_label==""){
             return true;
@@ -747,7 +873,9 @@
           let family     = filename.split("_")[0];
           let area       = r.values[index_col.area];
           let peak_label = r.values[index_col.peak_label];
-          let ppb_teoric = null;
+          let ppb_teoric = r.values[index_col.level];
+
+          //console.log({filename,ppb_teoric});
 
           let formula      = r.values[index_col.formula];
           let RT           = r.values[index_col.RT];
@@ -756,15 +884,33 @@
           let status       = r.values[index_col.status];
           let sample_type  = r.values[index_col.sample_type];
 
+          //per filtres TODO falta aclarir: ion ratio, response i "isotopic pattern".
+          let RT_Delta     = r.values[index_col.RT_Delta];
+          let mz_Delta     = parseFloat(r.values[index_col.mz_Delta]);
+          let SN           = r.values[index_col.SN];
+          let num_isotopes = r.values[index_col.num_isotopes];
+
+          //petits checks
+          if(isNaN(mz_Delta)) mz_Delta="N/F";
+          if(SN=="INF")       SN=Infinity;
+
+          //detecta si és família fixa (calibration)
+          if(sample_type=="Cal Std" || ppb_teoric!=""){
+            this.noms_families_fixes.add(family);
+          }
+
           //comprova si aquesta dada correspon a un blank
           //sino, assigna'l a recovery
           if(family=="Blank" && filename!=this.nom_blanc_mostres){
             this.nom_blanc_recovery=filename;
           }
 
-          //calcula ppb_teoric TODO
-          if(family=="CalCurve"||family=="MM"||family=="Recovery"){
-            ppb_teoric=0;//diferencia de null
+          //calcula ppb_teoric en cas que "sample_type" estigui malament
+          if(
+            ppb_teoric=="" &&
+            (family=="CalCurve"||family=="MM"||family=="Recovery")
+          ){
+            ppb_teoric=0;
             let filename_split = filename.split("_");
             for(let i=1;i<filename_split.length;i++){
               let token = filename_split[i];
@@ -775,6 +921,7 @@
               }
             }
           }
+
           if(family=="Blank"){
             ppb_teoric=0;
           }
@@ -821,6 +968,11 @@
             type,
             status,
             sample_type,
+
+            RT_Delta,
+            mz_Delta,
+            SN,
+            num_isotopes,
           };
         });
         this.sheets_processats++;
@@ -1001,7 +1153,6 @@
         return area;
       },
 
-      //wip TODO
       descarregar_fitxer_final(){
         let wb = new ExcelJS.Workbook();
 
@@ -1028,9 +1179,19 @@
           }
 
           //lectures
-          sh.addRow(['Compound','Filename','area(raw)','area(-blank)','ppb theoric','ppb computed','ppb computed (+recovery)']);
+          sh.addRow([
+            'Compound',
+            'Formula',
+            'Adduct',
+            'RT',
+            'Type',
+            'Status',
 
-          //agafa files
+            'Filename',
+            'area(raw)','area(-blank)','ppb theoric','ppb computed','ppb computed (+recovery)',
+          ]);
+
+          //copia files
           let rows = [...sheet.rows];
 
           //filtra per exclude
@@ -1062,6 +1223,12 @@
 
             sh.addRow([
               sheet.nom,
+              row.formula,
+              row.adduct,
+              row.RT,
+              row.type,
+              row.status,
+
               row.filename,
               area,
               area_blanked,
@@ -1102,6 +1269,33 @@
         }
 
         return millor;
+      },
+
+      select_all_filenames(){
+        this.get_filenames.forEach(fn=>{
+          this.filenames_seleccionats.add(fn);
+        });
+      },
+
+      filtra_rows(sheet){
+        //copia rows
+        let rows = [...sheet.rows];
+
+        //aplica filtres actius
+        this.filtres_maig_2026.forEach(fil=>{
+          if(!fil.actiu) return;
+          if(!fil.valors) return;
+
+          let col       = fil.columna; //string
+          let valor_lo = fil.valors[0]; //valor low
+          let valor_hi = fil.valors[1]; //valor high
+          rows = rows.filter(row=>{
+            let val = row[col]; //number
+            return valor_lo <= val&&val <= valor_hi;
+          });
+        });
+
+        return rows;
       },
     },
 
