@@ -75,6 +75,10 @@
     [valigntop]{
       vertical-align:top;
     }
+    summary:hover{
+      cursor:pointer;
+      text-decoration:underline;
+    }
   </style>
 </head><body>
 
@@ -86,7 +90,6 @@
   <b>ORBITRAP automatic file processing</b>
 </div><hr>
 
-
 <div id=app>
   <div v-if="!treballant && sheets_processats==0">
     <!--instruccions-->
@@ -94,21 +97,30 @@
       <summary><b>[info] Mandatory format of the input excel</b></summary>
       <ul>
         <li>Format ".xlsx"</li>
-        <li>Column "Filename"</li>
-        <li>Column "Area"</li>
-        <li>Column "Peak Label"</li>
-        <li>Filenames:
+
+        <li>Column  "Compound"    (text) </li>         
+        <li>Column  "Formula"     (text) </li>         
+        <li>Column  "RT"          (number) </li>  
+        <li>Column  "Adduct"      (text) </li>  
+        <li>Column  "Type"        (text) </li>  
+        <li>Column  "Status"      (text) </li>  
+        <li>Column  "Sample Type" (text) </li>
+
+        <li>Column "Filename" (text)   </li>
+        <li>Column "Area"     (text)   </li>
+        <li>Column "Peak Label" (text) </li>
+        <li>Filenames (TBC):
           <ul>
             <li>"CalCurve"</li>
             <li>"MM"</li>
             <li>"Blank"</li>
             <li>"Recovery"</li>
           </ul>
-          Every other filename will be considered as "samples"
         </li>
-        <li> Blank name for MM:      "MM_Blank_AIF" </li>
-        <li> Blank name for samples: "Blank_HPLC_AIF" </li>
-        <li> The name of the blank for the recovery will be deduced </li>
+
+        <li>Blank name for MM:      "MM_Blank_AIF" </li>
+        <li>Blank name for samples: "Blank_HPLC_AIF" </li>
+        <li>The name of the blank for the recovery will be deduced </li>
       </ul>
     </details><hr>
 
@@ -218,7 +230,7 @@
 
       <table border=1>
         <tr>
-          <th left>Choose Regression to compute PPB</th>
+          <th left>Choose Regression for "ppb computed"</th>
         </tr>
         <tr>
           <td>
@@ -228,6 +240,31 @@
           </td>
         </tr>
       </table>
+
+      <table border=1>
+        <tr><td><label><input type=checkbox> Area peak              </label></td></tr>
+        <tr><td><label><input type=checkbox> RT Delta ±0.3          </label></td></tr>
+        <tr><td><label><input type=checkbox> m/z Delta ±5ppm        </label></td></tr>
+        <tr><td><label><input type=checkbox> S/N&ge;10              </label></td></tr>
+        <tr><td><label><input type=checkbox> Ion ratio              </label></td></tr>
+        <tr><td><label><input type=checkbox> Number Isotopes Matched</label></td></tr>
+      </table>
+
+      <table border=1>
+        <tr>
+          <td>Vol initial sample (ml)</td>
+          <td><input type=number v-model="vol_initial_sample_ml" style="width:80px" min=0 step=1></td>
+        </tr>
+        <tr>
+          <td>Vol final extract (ml)</td>
+          <td><input type=number v-model="vol_final_extract_ml"  style="width:80px" min=0 step=0.1></td>
+        </tr>
+        <tr>
+          <td>Factor Concentration (&empty;)</td>
+          <td center>{{factor_concentration}}</td>
+        </tr>
+      </table>
+
     </div><hr>
 
     <!--filtres-->
@@ -324,10 +361,17 @@
     <table border=1 style="border-collapse:collapse">
       <tbody v-for="sheet in get_sheets_filtrats">
         <tr>
-          <td monospace valigntop style="color:blue">
+          <td monospace valigntop>
             <span hover_underline @click="filtre_nom_compost=sheet.nom">
               <span style="font-size:larger">{{sheet.nom}}</span>
             </span>
+
+            <!--formula-->
+            <div>
+              [{{
+                Array.from(new Set(sheet.rows.map(r=>r.formula))).join(", ")
+              }}]
+            </div>
 
             <!--taula blanks-->
             <div v-if="Object.values(sheet.blanks).length">
@@ -348,11 +392,11 @@
           <td valigntop>
             <table border=1 class=subtaula>
               <tr class=subtaula_header>
-                <td>type</td>
+                <td>groups</td>
                 <td>filename</td>
                 <td>area (raw)</td>
                 <td>area (-blank)</td>
-                <td>ppb theoric</td>
+                <td title="ppb theoric">level</td>
                 <td>ppb computed</td>
                 <td>
                   <div>ppb computed</div>
@@ -584,8 +628,8 @@
 
       //recovery thresholds
       recovery_thresholds:true,
-      recovery_threshold_lo:60,
-      recovery_threshold_hi:120,
+      recovery_threshold_lo:85,//60,
+      recovery_threshold_hi:86,//120,
 
       //filtre nom compost
       filtre_nom_compost:"",
@@ -619,6 +663,10 @@
 
       //blanks de mostres detectats (family=>filename)
       blanks_de_mostres_detectats:{},
+
+      //factor de concentracio
+      vol_initial_sample_ml:250,
+      vol_final_extract_ml:0.5,
     }},
 
     methods:{
@@ -648,6 +696,14 @@
             - array filename
             - array area
             - array peak label (i filtrar per valor=="T1")
+            - nous:
+              - array formula
+              - array RT
+              - array adduct
+              - array type
+              - array status
+              - array Sample Type
+              - array Level
         */
 
         let nom = sheet.name;
@@ -655,14 +711,25 @@
           nom = sheet.columns[0].values[2];
         }catch(err){}
 
-        //busca index columna "Filename"
-        let index_col_filename = sheet.columns.find(c=>c.values[1]=="Filename")._number;
+        //busca indexs de les columnes d'interès
+        let index_col={
+          "filename"    :sheet.columns.find(c=>c.values[1]=="Filename")?._number,
+          "area"        :sheet.columns.find(c=>c.values[1]=="Area")?._number,
+          "peak_label"  :sheet.columns.find(c=>c.values[1]=="Peak Label")?._number,
+          "formula"     :sheet.columns.find(c=>c.values[1]=="Formula")?._number,
+          "RT"          :sheet.columns.find(c=>c.values[1]=="RT")?._number,
+          "adduct"      :sheet.columns.find(c=>c.values[1]=="Adduct")?._number,
+          "type"        :sheet.columns.find(c=>c.values[1]=="Type")?._number,
+          "status"      :sheet.columns.find(c=>c.values[1]=="Status")?._number,
+          "sample_type" :sheet.columns.find(c=>c.values[1]=="Sample Type")?._number,
+        };
 
-        //busca index columna "Area"
-        let index_col_area = sheet.columns.find(c=>c.values[1]=="Area")._number;
-
-        //busca index columna "Peak Label"
-        let index_col_peak_label = sheet.columns.find(c=>c.values[1]=="Peak Label")._number;
+        //throw error si no troba alguna columna
+        let entry_index_undefined = Object.entries(index_col).find(([key,val])=>val==undefined);
+        if(entry_index_undefined){
+          let key = entry_index_undefined[0];
+          throw(`Column "${key}" not found`);
+        }
 
         //blank per família (area=number)
         let blanks={}; //{"family"=>area}
@@ -673,14 +740,21 @@
           if(this.peak_label==""){
             return true;
           }else{
-            return r.values[index_col_peak_label] == this.peak_label;
+            return r.values[index_col.peak_label] == this.peak_label;
           }
         }).map(r=>{
-          let filename   = r.values[index_col_filename];
+          let filename   = r.values[index_col.filename];
           let family     = filename.split("_")[0];
-          let area       = r.values[index_col_area];
-          let peak_label = r.values[index_col_peak_label];
+          let area       = r.values[index_col.area];
+          let peak_label = r.values[index_col.peak_label];
           let ppb_teoric = null;
+
+          let formula      = r.values[index_col.formula];
+          let RT           = r.values[index_col.RT];
+          let adduct       = r.values[index_col.adduct];
+          let type         = r.values[index_col.type];
+          let status       = r.values[index_col.status];
+          let sample_type  = r.values[index_col.sample_type];
 
           //comprova si aquesta dada correspon a un blank
           //sino, assigna'l a recovery
@@ -688,7 +762,7 @@
             this.nom_blanc_recovery=filename;
           }
 
-          //calcula ppb_teoric
+          //calcula ppb_teoric TODO
           if(family=="CalCurve"||family=="MM"||family=="Recovery"){
             ppb_teoric=0;//diferencia de null
             let filename_split = filename.split("_");
@@ -733,12 +807,25 @@
           //exclude for linear regression
           let exclude=false;
 
-          return {family,filename,area,peak_label,exclude,ppb_teoric};
+          return {
+            family,
+            filename,
+            area,
+            peak_label,
+            exclude,
+            ppb_teoric,
+            //nous
+            formula,
+            RT,
+            adduct,
+            type,
+            status,
+            sample_type,
+          };
         });
-
         this.sheets_processats++;
 
-        return {
+        return{
           nom, rows, blanks,
           regressio:null,
           recovery:null,
@@ -1111,6 +1198,12 @@
       },
       cal_mostrar_taula_mostres(){
         return Array.from(this.filenames_seleccionats).some(fn=>this.get_noms_mostres.has(fn));
+      },
+
+      factor_concentration(){
+        let v1=this.vol_initial_sample_ml;
+        let v2=this.vol_final_extract_ml;
+        return v2?v1/v2:0;
       },
     },
   }).mount("#app");
