@@ -18,4 +18,3 @@ Reunió 1 Desembre 2025: mcelic, lbosch
 
 4. [ok] Al càlcul de ppb, si dóna negatiu posar zero
 5. [__] Crear una vista per exportar resultats compactats
-

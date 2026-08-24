@@ -20,6 +20,25 @@
         background-color: yellow;
       }
     }
+
+    [center]{
+      text-align:center;
+    }
+    [left]{
+      text-align:left;
+    }
+    [small]{
+      font-size:smaller;
+    }
+
+    summary{
+      font-weight:bold;
+      cursor:pointer;
+    }
+    summary:hover{
+      text-decoration:underline;
+    }
+
     div[treballant]{
       animation-name: animacio;
       animation-duration: 2s;
@@ -28,12 +47,6 @@
     hr{
       border:none;
       border-top:1px solid #ccc;
-    }
-    [center]{
-      text-align:center;
-    }
-    [left]{
-      text-align:left;
     }
     [number]{
       text-align:right;
@@ -79,9 +92,6 @@
       cursor:pointer;
       text-decoration:underline;
     }
-    [small]{
-      font-size:smaller;
-    }
   </style>
 </head><body>
 
@@ -100,6 +110,7 @@
       <summary><b>[info] Mandatory format of the input excel</b></summary>
       <ul>
         <li>Format ".xlsx"</li>
+        <li>Each compound in a different sheet</li>
         <li>
           <details open>
             <summary>Columns</summary>
@@ -129,12 +140,14 @@
 
     <!--seleccionar valor peak label-->
     <p>
-      Column "Peak Label" value to filter:
+      Load only rows with "Peak Label" equal to:
       <input v-model="peak_label">
-    </p>
+    </p><hr>
 
     <!--boto carregar excel-->
-    <input type=file @change="load_excel($event)">
+    <input type=file @change="load_excel($event)"
+      style="font-size:x-large"
+    >
   </div>
 
   <div v-if="error" style="background:red">
@@ -146,506 +159,546 @@
   </div>
 
   <div v-if="sheets_processats && fitxer_carregat">
-    <ul>
-      <li>
-        Loaded file: <b><code>{{fitxer_carregat.name}}</code></b>&nbsp;
-        <small>({{(fitxer_carregat.size/1024/1024).toFixed(2)}} mb)</small>
-      </li>
-      <li>Filtered by "Peak Label" column value = "{{peak_label}}"</li>
-      <li>Number of compounds: {{sheets_processats}} (each sheet represents a compound)</li>
-      <li v-if="warnings.size" style="background:lightyellow">
-        Warnings:
-        <ul>
-          <li v-for="war in warnings">{{war}}</li>
-        </ul>
-      </li>
-    </ul>
-  </div><hr>
+    <details open>
+      <summary>Input file info</summary>
+      <ul>
+        <li>
+          Loaded file: <b><code>{{fitxer_carregat.name}}</code></b>&nbsp;
+          <small>({{(fitxer_carregat.size/1024/1024).toFixed(2)}} mb)</small>
+        </li>
+        <li>Filtered by "Peak Label" column value = "{{peak_label}}"</li>
+        <li>Number of compounds: {{sheets_processats}} (each sheet represents a compound)</li>
+        <li v-if="warnings.size" style="background:lightyellow">
+          Warnings:
+          <ul>
+            <li v-for="war in warnings">{{war}}</li>
+          </ul>
+        </li>
+      </ul>
+    </details><hr>
+  </div>
 
   <div v-if="sheets">
+    <!--configuration-->
+    <details open>
+      <summary>Configuration</summary>
+      <div
+        style="
+          display:flex;
+          gap:5px;
+        "
+      >
+        <!--menú per activar/desactivar filenames visibles-->
+        <div>
+          <table border=1>
+            <tr>
+              <th colspan=2 center>
+                <div>Visible filenames</div>
+                <div>
+                  <button @click="filenames_seleccionats.clear()" :disabled="filenames_seleccionats.size==0" title="unselect all">
+                    none
+                  </button>
+                  <button @click="select_all_filenames()" :disabled="filenames_seleccionats.size==get_filenames.length" title="select all">
+                    all
+                  </button>
+                </div>
+              </th>
+            </tr>
+            <tr>
+              <td center>Calibration</td>
+              <td center>Samples</td>
+            </tr>
+            <tr small>
+              <td v-for="set in [noms_families_fixes, get_noms_mostres]">
+                <div v-for="fn in Array.from(set)">
+                  <label>
+                    <input
+                      type=checkbox
+                      :checked="filenames_seleccionats.has(fn)"
+                      @change="filenames_seleccionats[!filenames_seleccionats.has(fn)?'add':'delete'](fn)"
+                    > {{fn}}
+                  </label>
+                </div>
+              </td>
+            </tr>
+          </table>
+        </div>
 
-    <div
-      style="
-        display:flex;
-        gap:5px;
-      "
-    >
-      <!--menú per activar/desactivar filenames visibles-->
-      <table border=1>
-        <tr>
-          <th colspan=2 left>
-            Visible filenames
-            <button @click="filenames_seleccionats.clear()" :disabled="filenames_seleccionats.size==0" title="unselect all">
-              none
-            </button>
-            <button @click="select_all_filenames()" :disabled="filenames_seleccionats.size==get_filenames.length" title="select all">
-              all
-            </button>
-          </th>
-        </tr>
-        <tr v-for="set,i in [noms_families_fixes, get_noms_mostres]">
-          <td>
-            {{[
-              "Calibration",
-              "Samples",
-            ][i]}}
-          </td>
-          <td>
-            <span v-for="fn in Array.from(set)">
-              <label>
-                <input
-                  type=checkbox
-                  :checked="filenames_seleccionats.has(fn)"
-                  @change="filenames_seleccionats[!filenames_seleccionats.has(fn)?'add':'delete'](fn)"
-                > {{fn}}
-              </label>
-            </span>
-          </td>
-        </tr>
-      </table>
-
-      <!--menú per activar/desactivar blancs-->
-      <table border=1>
-        <tr>
-          <th left>Blanks</th>
-          <th left>Filename</th>
-          <th left>Subtract?</th>
-        </tr>
-        <tr>
-          <td>MM</td>
-          <td><code>"{{nom_blanc_MM}}"</code></td>
-          <td>
-            <label><input type=radio v-model="restar_blancs.MM" :value="true" > yes</label>
-            <label><input type=radio v-model="restar_blancs.MM" :value="false"> no</label>
-          </td>
-        </tr>
-        <tr>
-          <td>Recovery</td>
-          <td><code>"{{nom_blanc_recovery}}"</code></td>
-          <td>
-            <label><input type=radio v-model="restar_blancs.recovery" :value="true" > yes</label>
-            <label><input type=radio v-model="restar_blancs.recovery" :value="false"> no</label>
-          </td>
-        </tr>
-        <tr>
-          <td>Samples</td>
-          <td>
-            <code>"{{nom_blanc_mostres}}"</code>
-            <div>
-              <table>
-                <tr v-for="val in Object.values(blanks_de_mostres_detectats)" style="font-size:smaller">
-                  <td><code>"{{val}}"</code></td>
-                </tr>
-              </table>
-            </div>
-          </td>
-          <td>
-            <label><input type=radio v-model="restar_blancs.mostres" :value="true" > yes</label>
-            <label><input type=radio v-model="restar_blancs.mostres" :value="false"> no</label>
-          </td>
-        </tr>
-      </table>
-
-      <table border=1>
-        <tr>
-          <th left>Choose Regression for "ppb computed"</th>
-        </tr>
-        <tr>
-          <td>
-            <label><input type=radio v-model=regressió_utilitzada value="CC">CalCurve</label><br>
-            <label><input type=radio v-model=regressió_utilitzada value="MM">MM</label><br>
-            <label><input type=radio v-model=regressió_utilitzada value="best">Best r<sup>2</sup> (CalCurve or MM)</label>
-          </td>
-        </tr>
-      </table>
-
-      <table border=1>
-        <tr v-for="fil in filtres_maig_2026">
-          <td>
-            <label>
-              <input type="checkbox" v-model="fil.actiu" :disabled="fil.valors==false">
-              <span v-html="fil.text"></span>
-            </label>
-          </td>
-          <td v-if="fil.valors">
-            <input type=number v-model="fil.valors[0]" :disabled="!fil.actiu" style="field-sizing:content">
-            <input type=number v-model="fil.valors[1]" :disabled="!fil.actiu" style="field-sizing:content" v-if="isFinite(fil.valors[1])">
-          </td>
-          <td v-if="!fil.valors">
-            (ask mcelic)
-          </td>
-        </tr>
-      </table>
-
-      <table border=1>
-        <tr>
-          <td>Vol initial sample (ml)</td>
-          <td><input type=number v-model="vol_initial_sample_ml" style="width:80px" min=0 step=1></td>
-        </tr>
-        <tr>
-          <td>Vol final extract (ml)</td>
-          <td><input type=number v-model="vol_final_extract_ml"  style="width:80px" min=0 step=0.1></td>
-        </tr>
-        <tr>
-          <td>Factor Concentration (&empty;)</td>
-          <td center>{{factor_concentration}}</td>
-        </tr>
-      </table>
-
-    </div><hr>
-
-    <!--filtres-->
-    <div
-      style="
-        display:grid;
-        grid-template-columns:repeat(4,1fr);
-        grid-gap:5px;
-      "
-    >
-      <!--filtre_nom_compost-->
-      <div>
-        <label>
-          Search compound name<br>
-          <input v-model="filtre_nom_compost"
-            style="
-              field-sizing: content;
-              min-width:150px;
-              padding:1px 5px;
-            "
-            :yellow="filtre_nom_compost!=''"
-            placeholder="compound name"
-          >
-          <button @click="filtre_nom_compost=''" :disabled="filtre_nom_compost==''">X</button>
-        </label><br>
-      </div>
-
-      <!--checkbox filtres regressio-->
-      <div>
-        <label>
-          <input type=checkbox v-model="veure_nomes_sheets_amb_regressio">
-          Filter by r<sup>2</sup>
-        </label><br>
-        <label>
-          r<sup>2</sup> &gt;
-          <input type=number :disabled="veure_nomes_sheets_amb_regressio==false" v-model="r_squared_threshold"
-            min=0 max=9 step=0.01
-          >
-        </label>
-      </div>
-
-      <!--limits recovery-->
-      <div>
-        <table border=1 style="border-collapse:collapse">
-          <tr>
-            <td rowspan=3 center>
-              <label>
-                <input type=checkbox v-model="recovery_thresholds">
-                Filter by Recovery
-              </label>
-            </td>
-          </tr>
-          <tr>
-            <td>low</td>
-            <td>
-              <label>
-                <input type=number v-model="recovery_threshold_lo" :disabled="!recovery_thresholds" placeholder="Recovery threshold low" min=0 max=999>%
-              </label>
-            </td>
-          </tr>
-          <tr>
-            <td>high</td>
-            <td>
-              <label>
-                <input type=number v-model="recovery_threshold_hi" :disabled="!recovery_thresholds" placeholder="Recovery threshold high" min=0 max=999>%
-              </label>
-            </td>
-          </tr>
-        </table>
-      </div>
-
-      <div>
-        <label>
-          <input type=checkbox v-model="mostrar_area_NF">
-          Show rows with area "N/F"
-        </label><br>
-      </div>
-    </div><hr>
-
-    <div style="margin-top:5px">
-      <b>Results ({{get_sheets_filtrats.length}}/{{sheets.length}})</b>
-    </div>
-
-    <div v-if="get_sheets_filtrats.length==0" style="font-size:larger;color:#666">~No results</div>
-
-    <div v-if="get_sheets_filtrats">
-      <p>
-        <button @click="descarregar_fitxer_final()" :disabled="get_sheets_filtrats.length==0">
-          export results xlsx
-        </button>
-      </p>
-    </div>
-
-    <table border=1 style="border-collapse:collapse">
-      <tbody v-for="sheet in get_sheets_filtrats">
-        <tr>
-          <td monospace valigntop>
-            <span hover_underline @click="filtre_nom_compost=sheet.nom">
-              <span style="font-size:larger">{{sheet.nom}}</span>
-            </span>
-
-            <!--formula-->
-            <div>
-              [{{
-                Array.from(new Set(sheet.rows.map(r=>r.formula))).join(", ")
-              }}]
-            </div>
-
-            <!--taula blanks-->
-            <div v-if="Object.values(sheet.blanks).length">
-              <br>
-              <table border=1 style="font-size:smaller;color:black">
-                <tr>
-                  <th>blank</th>
-                  <th>area</th>
-                </tr>
-                <tr v-for="[key,val] in Object.entries(sheet.blanks)">
-                  <td>{{key}}</td>
-                  <td>{{val}}</td>
-                </tr>
-              </table>
-            </div>
-          </td>
-
-          <td valigntop>
-            <table border=1 class=subtaula>
-              <tr class=subtaula_header>
-                <td>groups</td>
-                <td>sample type</td>
-                <td>adduct</td>
-                <td>RT</td>
-                <td>RT Delta</td>
-                <td>m/z Delta</td>
-                <td>S/N</td>
-
-                <td>type</td>
-                <td>status</td>
-
-                <td>filename</td>
-                <td>area (raw)</td>
-                <td>area (-blank)</td>
-                <td>
-                  <div>ppb theoric</div>
-                  <div small>("level")</div>
-                </td>
-                <td>ppb computed</td>
-                <td>
-                  <div>ppb computed</div>
-                  <div small>(appl. recovery)</div>
-                </td>
-                <td title="exclude for linear regression calculation">
-                  exclude
-                </td>
-              </tr>
-
-              <!--calibration-->
-              <tbody v-for="row in filtra_rows(sheet)" v-if="cal_mostrar_taula_calibracio">
-                <tr
-                  v-if="
-                    filenames_seleccionats.has(row.family) && noms_families_fixes.has(row.family)
-                    && (mostrar_area_NF||row.area!='N/F')
-                  "
-                  v-for="area_blanked in [calcula_area_minus_blank(sheet, row.family, row.area)]"
-                >
-                  <td style="color:#aaa">calibration</td>
-                  <td center style="color:#aaa" small>{{row.sample_type}}</td>
-                  <td center style="color:#aaa" small>{{row.adduct}}</td>
-                  <td number>{{row.RT}}</td>
-                  <td number>{{row.RT_Delta}}</td>
-                  <td number>
-                    <div v-if="row.mz_Delta=='N/F'" empty>
-                      {{row.mz_Delta}}
-                    </div>
-                    <div v-else>
-                      {{row.mz_Delta}}
-                    </div>
-                  </td>
-                  <td number>{{row.SN}}</td>
-
-                  <td center style="color:#aaa" small>{{row.type}}</td>
-                  <td center style="color:#aaa" small>{{row.status}}</td>
-
-                  <td monospace>
-                    {{row.filename}}
-                  </td>
-
-                  <td number>
-                    <div v-if="row.area=='N/F'" empty>
-                      {{row.area}}
-                    </div>
-                    <div v-else>
-                      {{row.area}}
-                    </div>
-                  </td>
-
-                  <td number>
-                    <div v-if="row.area!=area_blanked">
-                      {{area_blanked}}
-                    </div>
-                  </td>
-
-                  <td number>
-                    <div v-if="row.ppb_teoric!=null" center>
-                      {{row.ppb_teoric}}
-                    </div>
-                    <div v-else empty>&empty;</div>
-                  </td>
-
-                  <td number>
-                    <div v-for="ppb_computed in [quantifica_area(sheet, area_blanked)]">
-                      <div v-if="ppb_computed">
-                        {{ppb_computed}}
-                      </div>
-                      <div v-else empty>&empty;</div>
-                    </div>
-                  </td>
-
-                  <td empty>&empty;</td>
-
-                  <td v-if="['CalCurve','MM','Recovery'].includes(row.family)" center>
-                    <input type=checkbox v-model="row.exclude">
-                  </td>
-                </tr>
-              </tbody>
-
-              <!--samples-->
-              <tbody v-for="row in filtra_rows(sheet)" v-if="cal_mostrar_taula_mostres">
-                <tr
-                  v-if="
-                    filenames_seleccionats.has(row.family) && get_noms_mostres.has(row.family)
-                    && (mostrar_area_NF||row.area!='N/F')
-                    "
-                  v-for="area_blanked in [calcula_area_minus_blank(sheet, row.family, row.area)]"
-                >
-                  <td style="color:#aaa">sample</td>
-                  <td center style="color:#aaa" small>{{row.sample_type}}</td>
-                  <td center style="color:#aaa" small>{{row.adduct}}</td>
-                  <td number>{{row.RT}}</td>
-                  <td number>{{row.RT_Delta}}</td>
-                  <td number>
-                    <div v-if="row.mz_Delta=='N/F'" empty>
-                      {{row.mz_Delta}}
-                    </div>
-                    <div v-else>
-                      {{row.mz_Delta}}
-                    </div>
-                  </td>
-                  <td number>{{row.SN}}</td>
-
-                  <td center style="color:#aaa" small>{{row.type}}</td>
-                  <td center style="color:#aaa" small>{{row.status}}</td>
-
-                  <td monospace>
-                    {{row.filename}}
-                  </td>
-
-                  <td number>
-                    <div v-if="row.area=='N/F'" empty>
-                      {{row.area}}
-                    </div>
-                    <div v-else>
-                      {{row.area}}
-                    </div>
-                  </td>
-
-                  <td number>
-                    <div v-if="row.area!=area_blanked">
-                      {{area_blanked}}
-                    </div>
-                  </td>
-
-                  <td number>
-                    <div v-if="row.ppb_teoric!=null" center>
-                      {{row.ppb_teoric}}
-                    </div>
-                    <div v-else empty>&empty;</div>
-                  </td>
-
-                  <td number>
-                    <div v-for="ppb_computed in [quantifica_area(sheet, area_blanked)]">
-                      <div v-if="ppb_computed">
-                        {{ppb_computed}}
-                      </div>
-                      <div v-else empty>&empty;</div>
-                    </div>
-                  </td>
-
-                  <td number >
-                    <div v-for="rec in [sheet.recovery]">
-                      <div v-if="rec">
-                        {{quantifica_area(sheet, area_blanked)*100/rec}}
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </td>
-
-          <!--taules regressio i recovery-->
-          <td valigntop>
-            <div style="display:flex">
-              <div v-for="tipus_regressio in ['CC','MM']">
-                <div v-if="sheet.regressio[tipus_regressio]">
-                  <table border=1 class=subtaula
-                    v-if="regressió_utilitzada=='best' || regressió_utilitzada==tipus_regressio"
-                    style="margin-bottom:2px"
-                  >
-                    <tr>
-                      <th colspan=2
-                        :millor_regresio="calcula_millor_regressio(sheet)==tipus_regressio"
-                      >
-                        <small>
-                          Regression {{tipus_regressio=='CC'?'CalCurve':tipus_regressio}} (ppb = m·area + n)
-                        </small>
-                      </th>
-                    </tr>
-                    <tr>
-                      <th>m</th>
-                      <td number>{{sheet.regressio[tipus_regressio].m}}</td>
-                    </tr>
-                    <tr>
-                      <th>n</th>
-                      <td number>{{sheet.regressio[tipus_regressio].n}}</td>
-                    </tr>
-                    <tr>
-                      <th>r<sup>2</sup></th>
-                      <td number>{{sheet.regressio[tipus_regressio].r_squared}}</td>
-                    </tr>
-                    <tr>
-                      <td>#points</td>
-                      <td center monospace>{{sheet.regressio[tipus_regressio].N}}</td>
+        <!--menú per activar/desactivar blancs-->
+        <div>
+          <table border=1>
+            <tr>
+              <th>Blanks</th>
+              <th>Filename</th>
+              <th>Subtract?</th>
+            </tr>
+            <tr>
+              <td>MM</td>
+              <td><code>"{{nom_blanc_MM}}"</code></td>
+              <td>
+                <div><label><input type=radio v-model="restar_blancs.MM" :value="true" > yes</label></div>
+                <div><label><input type=radio v-model="restar_blancs.MM" :value="false"> no</label></div>
+              </td>
+            </tr>
+            <tr>
+              <td>Recovery</td>
+              <td><code>"{{nom_blanc_recovery}}"</code></td>
+              <td>
+                <div><label><input type=radio v-model="restar_blancs.recovery" :value="true" > yes</label></div>
+                <div><label><input type=radio v-model="restar_blancs.recovery" :value="false"> no</label></div>
+              </td>
+            </tr>
+            <tr>
+              <td>Samples</td>
+              <td>
+                <code>"{{nom_blanc_mostres}}"</code>
+                <div>
+                  <table>
+                    <tr v-for="val in Object.values(blanks_de_mostres_detectats)" style="font-size:smaller">
+                      <td><code>"{{val}}"</code></td>
                     </tr>
                   </table>
                 </div>
-              </div>
-            </div>
+              </td>
+              <td>
+                <div><label><input type=radio v-model="restar_blancs.mostres" :value="true" > yes</label></div>
+                <div><label><input type=radio v-model="restar_blancs.mostres" :value="false"> no</label></div>
+              </td>
+            </tr>
+          </table>
+        </div>
 
-            <table
-              border=1
-              class=subtaula
-              v-if="sheet.recovery"
-            >
+        <!--choose regression-->
+        <div>
+          <table border=1>
+            <tr>
+              <th>Regression used to calculate "ppb computed"</th>
+            </tr>
+            <tr>
+              <td>
+                <label><input type=radio v-model=regressió_utilitzada value="CC">CalCurve</label><br>
+                <label><input type=radio v-model=regressió_utilitzada value="MM">MM</label><br>
+                <label><input type=radio v-model=regressió_utilitzada value="best">Best r<sup>2</sup> (CalCurve or MM)</label>
+              </td>
+            </tr>
+          </table>
+        </div>
+
+        <!--filter-->
+        <div>
+          <table border=1>
+            <tr>
+              <th colspan=2>Filters</th>
+            </tr>
+
+            <!--filtres inicials-->
+            <tbody>
+              <!--filtre_nom_compost-->
               <tr>
-                <th>
-                  <small>Recovery (%)</small>
-                </th>
-                <td>{{sheet.recovery}}</td>
+                <td>Compound name</td>
+                <td>
+                  <label>
+                    <input v-model="filtre_nom_compost"
+                      style="
+                        field-sizing: content;
+                        min-width:150px;
+                        padding:1px 5px;
+                      "
+                      :yellow="filtre_nom_compost!=''"
+                      placeholder="compound name"
+                    >
+                    <button @click="filtre_nom_compost=''" :disabled="filtre_nom_compost==''">X</button>
+                  </label>
+                </td>
               </tr>
-            </table>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+
+              <!--r2 threshold-->
+              <tr>
+                <td>
+                  <label>
+                    <input type=checkbox v-model="veure_nomes_sheets_amb_regressio">
+                    Filter by r<sup>2</sup>
+                  </label>
+                </td>
+                <td>
+                  <label>
+                    r<sup>2</sup> &gt;
+                    <input type=number :disabled="veure_nomes_sheets_amb_regressio==false" v-model="r_squared_threshold"
+                      min=0 max=9 step=0.01
+                    >
+                  </label>
+                </td>
+              </tr>
+
+              <!--recovery threshold-->
+              <tr>
+                <td>
+                  <label>
+                    <input type=checkbox v-model="recovery_thresholds">
+                    Filter by Recovery (%)
+                  </label>
+                </td>
+                <td>
+                  <div>
+                    <label monospace>
+                      min <input type=number v-model="recovery_threshold_lo" :disabled="!recovery_thresholds" placeholder="low" min=0 max=999>%
+                    </label>
+                  </div>
+                  <div>
+                    <label monospace>
+                      max <input type=number v-model="recovery_threshold_hi" :disabled="!recovery_thresholds" placeholder="high" min=0 max=999>%
+                    </label>
+                  </div>
+                </td>
+              </tr>
+
+              <tr>
+                <td colspan=2>
+                  <label>
+                    <input type=checkbox v-model="mostrar_area_NF">
+                    Show rows with area "N/F"
+                  </label>
+                </td>
+              </tr>
+
+              <tr>
+                <td colspan=2>
+                  <label>
+                    TO DO
+                    <input type=checkbox>
+                    Display only compounds with detected concentrations in samples
+                  </label>
+                </td>
+              </tr>
+            </tbody>
+
+            <!--filtres nous demanats per mcelic-->
+            <tr v-for="fil in filtres_maig_2026">
+              <td>
+                <label>
+                  <input type="checkbox" v-model="fil.actiu" :disabled="fil.valors==false">
+                  <span v-html="fil.text"></span>
+                </label>
+              </td>
+              <td v-if="fil.valors">
+                <input type=number v-model="fil.valors[0]" :disabled="!fil.actiu" style="field-sizing:content">
+                <input type=number v-model="fil.valors[1]" :disabled="!fil.actiu" style="field-sizing:content" v-if="isFinite(fil.valors[1])">
+              </td>
+              <td v-if="!fil.valors">
+                (ask mcelic)
+              </td>
+            </tr>
+          </table>
+        </div>
+
+        <!--factor of concentration-->
+        <div>
+          <table border=1>
+            <tr>
+              <th colspan=2>C<sub>vial</sub> (ng/mL) calculation</th>
+            </tr>
+            <tr>
+              <td>Vol initial sample (ml)</td>
+              <td><input type=number v-model="vol_initial_sample_ml" style="width:80px" min=0 step=1></td>
+            </tr>
+            <tr>
+              <td>Vol final extract (ml)</td>
+              <td><input type=number v-model="vol_final_extract_ml"  style="width:80px" min=0 step=0.1></td>
+            </tr>
+            <tr>
+              <td>Factor Concentration (&empty;)</td>
+              <td center>{{factor_concentration}}</td>
+            </tr>
+          </table>
+        </div>
+      </div>
+    </details><hr>
+
+    <!--results-->
+    <details open>
+      <summary>
+        Results ({{get_sheets_filtrats.length}}/{{sheets.length}})
+      </summary>
+      <div>
+        <div v-if="get_sheets_filtrats.length==0" style="font-size:larger;color:#666">~No results</div>
+        <div v-if="get_sheets_filtrats">
+          <p>
+            <button @click="descarregar_fitxer_final()" :disabled="get_sheets_filtrats.length==0">
+              export results xlsx
+            </button>
+          </p>
+        </div>
+        <table border=1 style="border-collapse:collapse">
+          <tbody v-for="sheet in get_sheets_filtrats">
+            <tr>
+              <td monospace valigntop>
+                <span hover_underline @click="filtre_nom_compost=sheet.nom">
+                  <span style="font-size:larger">{{sheet.nom}}</span>
+                </span>
+
+                <!--formula-->
+                <div>
+                  [{{
+                    Array.from(new Set(sheet.rows.map(r=>r.formula))).join(", ")
+                  }}]
+                </div>
+
+                <!--taula blanks-->
+                <div v-if="Object.values(sheet.blanks).length">
+                  <br>
+                  <table border=1 style="font-size:smaller;color:black">
+                    <tr>
+                      <th>blank</th>
+                      <th>area</th>
+                    </tr>
+                    <tr v-for="[key,val] in Object.entries(sheet.blanks)">
+                      <td>{{key}}</td>
+                      <td>{{val}}</td>
+                    </tr>
+                  </table>
+                </div>
+              </td>
+
+              <td valigntop>
+                <table border=1 class=subtaula>
+                  <tr class=subtaula_header>
+                    <td>groups</td>
+                    <td>sample type</td>
+                    <td>adduct</td>
+                    <td>RT</td>
+                    <td>RT Delta</td>
+                    <td>m/z Delta</td>
+                    <td>S/N</td>
+
+                    <td>type</td>
+                    <td>status</td>
+
+                    <td>filename</td>
+                    <td>area (raw)</td>
+                    <td>area (-blank)</td>
+                    <td>
+                      <div>ppb theoric</div>
+                      <div small>("level")</div>
+                    </td>
+                    <td>ppb computed</td>
+                    <td>
+                      <div>ppb computed</div>
+                      <div small>(appl. recovery)</div>
+                    </td>
+                    <td title="exclude for linear regression calculation">
+                      exclude
+                    </td>
+                  </tr>
+
+                  <!--calibration-->
+                  <tbody v-for="row in filtra_rows(sheet)" v-if="cal_mostrar_taula_calibracio">
+                    <tr
+                      v-if="
+                        filenames_seleccionats.has(row.family) && noms_families_fixes.has(row.family)
+                        && (mostrar_area_NF||row.area!='N/F')
+                      "
+                      v-for="area_blanked in [calcula_area_minus_blank(sheet, row.family, row.area)]"
+                    >
+                      <td style="color:#aaa">calibration</td>
+                      <td center style="color:#aaa" small>{{row.sample_type}}</td>
+                      <td center style="color:#aaa" small>{{row.adduct}}</td>
+                      <td number>{{row.RT}}</td>
+                      <td number>{{row.RT_Delta}}</td>
+                      <td number>
+                        <div v-if="row.mz_Delta=='N/F'" empty>
+                          {{row.mz_Delta}}
+                        </div>
+                        <div v-else>
+                          {{row.mz_Delta}}
+                        </div>
+                      </td>
+                      <td number>{{row.SN}}</td>
+
+                      <td center style="color:#aaa" small>{{row.type}}</td>
+                      <td center style="color:#aaa" small>{{row.status}}</td>
+
+                      <td monospace>
+                        {{row.filename}}
+                      </td>
+
+                      <td number>
+                        <div v-if="row.area=='N/F'" empty>
+                          {{row.area}}
+                        </div>
+                        <div v-else>
+                          {{row.area}}
+                        </div>
+                      </td>
+
+                      <td number>
+                        <div v-if="row.area!=area_blanked">
+                          {{area_blanked}}
+                        </div>
+                      </td>
+
+                      <td number>
+                        <div v-if="row.ppb_teoric!=null" center>
+                          {{row.ppb_teoric}}
+                        </div>
+                        <div v-else empty>&empty;</div>
+                      </td>
+
+                      <td number>
+                        <div v-for="ppb_computed in [quantifica_area(sheet, area_blanked)]">
+                          <div v-if="ppb_computed">
+                            {{ppb_computed}}
+                          </div>
+                          <div v-else empty>&empty;</div>
+                        </div>
+                      </td>
+
+                      <td empty>&empty;</td>
+
+                      <td v-if="['CalCurve','MM','Recovery'].includes(row.family)" center>
+                        <input type=checkbox v-model="row.exclude">
+                      </td>
+                    </tr>
+                  </tbody>
+
+                  <!--samples-->
+                  <tbody v-for="row in filtra_rows(sheet)" v-if="cal_mostrar_taula_mostres">
+                    <tr
+                      v-if="
+                        filenames_seleccionats.has(row.family) && get_noms_mostres.has(row.family)
+                        && (mostrar_area_NF||row.area!='N/F')
+                        "
+                      v-for="area_blanked in [calcula_area_minus_blank(sheet, row.family, row.area)]"
+                    >
+                      <td style="color:#aaa">sample</td>
+                      <td center style="color:#aaa" small>{{row.sample_type}}</td>
+                      <td center style="color:#aaa" small>{{row.adduct}}</td>
+                      <td number>{{row.RT}}</td>
+                      <td number>{{row.RT_Delta}}</td>
+                      <td number>
+                        <div v-if="row.mz_Delta=='N/F'" empty>
+                          {{row.mz_Delta}}
+                        </div>
+                        <div v-else>
+                          {{row.mz_Delta}}
+                        </div>
+                      </td>
+                      <td number>{{row.SN}}</td>
+
+                      <td center style="color:#aaa" small>{{row.type}}</td>
+                      <td center style="color:#aaa" small>{{row.status}}</td>
+
+                      <td monospace>
+                        {{row.filename}}
+                      </td>
+
+                      <td number>
+                        <div v-if="row.area=='N/F'" empty>
+                          {{row.area}}
+                        </div>
+                        <div v-else>
+                          {{row.area}}
+                        </div>
+                      </td>
+
+                      <td number>
+                        <div v-if="row.area!=area_blanked">
+                          {{area_blanked}}
+                        </div>
+                      </td>
+
+                      <td number>
+                        <div v-if="row.ppb_teoric!=null" center>
+                          {{row.ppb_teoric}}
+                        </div>
+                        <div v-else empty>&empty;</div>
+                      </td>
+
+                      <td number>
+                        <div v-for="ppb_computed in [quantifica_area(sheet, area_blanked)]">
+                          <div v-if="ppb_computed">
+                            {{ppb_computed}}
+                          </div>
+                          <div v-else empty>&empty;</div>
+                        </div>
+                      </td>
+
+                      <td number >
+                        <div v-for="rec in [sheet.recovery]">
+                          <div v-if="rec">
+                            {{quantifica_area(sheet, area_blanked)*100/rec}}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </td>
+
+              <!--taules regressio i recovery-->
+              <td valigntop>
+                <div style="display:flex">
+                  <div v-for="tipus_regressio in ['CC','MM']">
+                    <div v-if="sheet.regressio[tipus_regressio]">
+                      <table border=1 class=subtaula
+                        v-if="regressió_utilitzada=='best' || regressió_utilitzada==tipus_regressio"
+                        style="margin-bottom:2px"
+                      >
+                        <tr>
+                          <th colspan=2
+                            :millor_regresio="calcula_millor_regressio(sheet)==tipus_regressio"
+                          >
+                            <small>
+                              Regression {{tipus_regressio=='CC'?'CalCurve':tipus_regressio}} (ppb = m·area + n)
+                            </small>
+                          </th>
+                        </tr>
+                        <tr>
+                          <th>m</th>
+                          <td number>{{sheet.regressio[tipus_regressio].m}}</td>
+                        </tr>
+                        <tr>
+                          <th>n</th>
+                          <td number>{{sheet.regressio[tipus_regressio].n}}</td>
+                        </tr>
+                        <tr>
+                          <th>r<sup>2</sup></th>
+                          <td number>{{sheet.regressio[tipus_regressio].r_squared}}</td>
+                        </tr>
+                        <tr>
+                          <td>#points</td>
+                          <td center monospace>{{sheet.regressio[tipus_regressio].N}}</td>
+                        </tr>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                <!--TODO-->
+                <div>
+                  <p>
+                    TO DO
+                    <button>draw cal curve</button>
+                  </p>
+                </div>
+
+                <table
+                  border=1
+                  class=subtaula
+                  v-if="sheet.recovery"
+                >
+                  <tr>
+                    <th>
+                      <small>Recovery (%)</small>
+                    </th>
+                    <td>{{sheet.recovery}}</td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </details><hr>
   </div>
 </div>
 
@@ -709,8 +762,8 @@
 
       //recovery thresholds
       recovery_thresholds:true,
-      recovery_threshold_lo:85,//60, TODO
-      recovery_threshold_hi:86,//120, TODO
+      recovery_threshold_lo:60,
+      recovery_threshold_hi:120,
 
       //filtre nom compost
       filtre_nom_compost:"",
